@@ -1,216 +1,112 @@
-"""
-NIDS Predictor — Single-sample classification UI
-Input numeric feature values → get instant attack classification
-"""
+# ============================================================
+# NIDS Flask Backend — Hybrid Stacked Ensemble v2.0
+# ============================================================
+# Install dependencies:
+#   pip install flask flask-cors
+#
+# Run:
+#   python app.py
+#
+# Then open nids_dashboard.html in your browser,
+# click [ MODE: SIM ] to switch to [ MODE: LIVE ],
+# and the dashboard will call this backend for predictions.
+# ============================================================
 
-import sys, os, glob, gc, re
+import os
 import numpy as np
-import pandas as pd
-import streamlit as st
-import lightgbm as lgb
-from sklearn.ensemble import BaggingClassifier
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import StratifiedKFold, train_test_split
-from sklearn.preprocessing import LabelEncoder, MinMaxScaler
-from sklearn.utils.class_weight import compute_sample_weight
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 
-st.set_page_config(page_title="NIDS Predictor", page_icon="🛡️", layout="centered")
+app = Flask(__name__)
+CORS(app)
 
-st.markdown("""
-    <div style='text-align:center; padding:1rem'>
-        <h1>🛡️ NIDS Predictor</h1>
-        <p style='color:#888'>Hybrid Enhanced Stacked Ensemble — LightGBM + Bagging/DT</p>
-    </div>
-""", unsafe_allow_html=True)
+SAVE_DIR = './saved_model'
 
-# ──────────────────────────────────────
-# Train model (cached)
-# ──────────────────────────────────────
-@st.cache_resource
-def train_model():
-    with st.spinner("Loading CICIDS 2017 data..."):
-        CSV_FOLDER = './MachineLearningCVE'
-        csv_files = sorted(glob.glob(os.path.join(CSV_FOLDER, '*.csv')))
-        dfs = [pd.read_csv(f, low_memory=False) for f in csv_files]
-        df = pd.concat(dfs, ignore_index=True)
-        del dfs; gc.collect()
+print('[NIDS] Loading model components...')
+try:
+    import joblib
+    lgbm_model    = joblib.load(os.path.join(SAVE_DIR, 'lgbm_model.pkl'))
+    bagging_model = joblib.load(os.path.join(SAVE_DIR, 'bagging_model.pkl'))
+    meta          = joblib.load(os.path.join(SAVE_DIR, 'meta_learner.pkl'))
+    scaler        = joblib.load(os.path.join(SAVE_DIR, 'scaler.pkl'))
+    le            = joblib.load(os.path.join(SAVE_DIR, 'label_encoder.pkl'))
+    print('[NIDS] All models loaded successfully!')
+    MODEL_LOADED = True
+except Exception as e:
+    print(f'[NIDS] WARNING: Could not load models — {e}')
+    print('[NIDS] Running in DEMO mode (random predictions)')
+    MODEL_LOADED = False
 
-        df.columns = df.columns.str.strip()
-        drop_cols = [c for c in ['Flow ID','Source IP','Destination IP','Timestamp',
-                                  'Src IP','Dst IP','src_ip','dst_ip'] if c in df.columns]
-        if drop_cols: df.drop(columns=drop_cols, inplace=True)
-        df.replace([np.inf, -np.inf], np.nan, inplace=True)
-        df.dropna(axis=1, thresh=len(df)*0.5, inplace=True)
-        num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-        if num_cols: df[num_cols] = df[num_cols].fillna(df[num_cols].median())
-        df.drop_duplicates(inplace=True)
+DEMO_LABELS = [
+    'BENIGN', 'BENIGN', 'BENIGN', 'BENIGN', 'BENIGN',
+    'DDoS', 'DoS Hulk', 'PortScan', 'DoS GoldenEye',
+    'FTP-Patator', 'SSH-Patator', 'Bot', 'Web Attack-Brute Force',
+    'Web Attack-XSS', 'Heartbleed'
+]
 
-        le = LabelEncoder()
-        df['label_enc'] = le.fit_transform(df['Label'].astype(str))
-        class_names = le.classes_
-        n_classes = len(class_names)
-        feature_cols = [c for c in df.select_dtypes(include=[np.number]).columns
-                        if c != 'label_enc']
+@app.route('/ping', methods=['GET'])
+def ping():
+    return jsonify({
+        'status': 'online',
+        'model_loaded': MODEL_LOADED,
+        'model': 'Hybrid Stacked Ensemble (LightGBM + Bagging + LogisticReg)'
+    })
 
-        X = df[feature_cols]
-        y = df['label_enc']
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.3, random_state=42, stratify=y)
+@app.route('/predict', methods=['POST'])
+def predict():
+    try:
+        data = request.json
+        if not data or 'features' not in data:
+            return jsonify({'error': 'Missing features'}), 400
 
-        scaler = MinMaxScaler()
-        X_train = scaler.fit_transform(X_train)
-        _ = scaler.transform(X_test)
-        del df; gc.collect()
+        features = np.array(data['features'], dtype=float).reshape(1, -1)
 
-    with st.spinner("Training ensemble (5-fold CV)..."):
-        N_FOLDS = 5
-        skf = StratifiedKFold(n_splits=N_FOLDS, shuffle=True, random_state=42)
-        lgbm = lgb.LGBMClassifier(
-            objective='multiclass', metric='multi_logloss', num_class=n_classes,
-            n_estimators=100, learning_rate=0.05, max_depth=8, num_leaves=63,
-            min_child_samples=20, subsample=0.8, colsample_bytree=0.8,
-            reg_alpha=0.1, reg_lambda=0.1, class_weight='balanced',
-            device='cpu', random_state=42, n_jobs=2, verbose=-1)
-        bag = BaggingClassifier(
-            estimator=DecisionTreeClassifier(criterion='gini', max_depth=10,
-                        min_samples_split=20, min_samples_leaf=10, random_state=42),
-            n_estimators=100, max_samples=0.8, max_features=0.5,
-            bootstrap=True, n_jobs=2, random_state=42)
+        if MODEL_LOADED:
+            scaled = scaler.transform(features)
+            p1 = lgbm_model.predict_proba(scaled)
+            p2 = bagging_model.predict_proba(scaled)
+            meta_input = np.hstack([p1, p2])
+            pred = meta.predict(meta_input)
+            conf = float(meta.predict_proba(meta_input).max())
+            label = le.inverse_transform(pred)[0]
+        else:
+            import random
+            label = random.choices(
+                DEMO_LABELS,
+                weights=[55,55,55,55,55, 6,5,5,3, 3,3,2,2, 2,1],
+                k=1
+            )[0]
+            conf = round(0.82 + np.random.random() * 0.17, 4)
 
-        oof_lgbm = np.zeros((len(X_train), n_classes))
-        oof_bag = np.zeros((len(X_train), n_classes))
-        ya = y_train.values
-        for tr, val in skf.split(X_train, ya):
-            lgbm.fit(X_train[tr], ya[tr], eval_set=[(X_train[tr], ya[tr]), (X_train[val], ya[val])],
-                     callbacks=[lgb.early_stopping(50, verbose=False), lgb.log_evaluation(-1)])
-            oof_lgbm[val] = lgbm.predict_proba(X_train[val])
-            sw = compute_sample_weight(class_weight='balanced', y=ya[tr])
-            bag.fit(X_train[tr], ya[tr], sample_weight=sw)
-            oof_bag[val] = bag.predict_proba(X_train[val])
-            gc.collect()
+        return jsonify({
+            'label': label,
+            'confidence': round(conf, 4),
+            'model_used': 'stacked_ensemble' if MODEL_LOADED else 'demo_random'
+        })
 
-        M_train = np.hstack([oof_lgbm, oof_bag])
-        meta = LogisticRegression(max_iter=1000, random_state=42, class_weight='balanced',
-                                   solver='lbfgs', n_jobs=-1)
-        meta.fit(M_train, ya)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
-    return scaler, feature_cols, class_names, lgbm, bag, meta
+@app.route('/predict_csv', methods=['POST'])
+def predict_csv():
+    """
+    Send a full CSV row for prediction.
+    Example:
+        curl -X POST http://localhost:5000/predict_csv \
+             -H "Content-Type: application/json" \
+             -d '{"features": [0.1, 0.5, ...]}'
+    """
+    return predict()
 
-scaler, feature_cols, class_names, lgbm_model, bag_model, meta_learner = train_model()
-n_features = len(feature_cols)
+@app.route('/status', methods=['GET'])
+def status():
+    return jsonify({
+        'model_loaded': MODEL_LOADED,
+        'save_dir': os.path.abspath(SAVE_DIR),
+        'files_found': os.listdir(SAVE_DIR) if os.path.exists(SAVE_DIR) else []
+    })
 
-# ──────────────────────────────────────
-# UI: Input
-# ──────────────────────────────────────
-st.divider()
-st.markdown("### Enter Network Flow Features")
-
-input_method = st.radio("Input method:", ["Paste CSV line", "Manual entry"], horizontal=True)
-
-values = None
-
-if input_method == "Paste CSV line":
-    csv_text = st.text_area(
-        f"Paste {n_features} comma-separated numeric values:",
-        height=100,
-        placeholder="e.g. 0.0, 0.0, 0.0, 1.0, 0.0, ..."
-    )
-    if csv_text:
-        try:
-            nums = [float(x.strip()) for x in csv_text.replace('\n', ',').split(',') if x.strip()]
-            if len(nums) == n_features:
-                values = np.array(nums).reshape(1, -1)
-            else:
-                st.warning(f"Expected {n_features} values, got {len(nums)}")
-        except:
-            st.error("Invalid numbers — check format")
-
-else:
-    with st.expander(f"Enter {n_features} feature values", expanded=True):
-        cols_per_row = 4
-        rows = (n_features + cols_per_row - 1) // cols_per_row
-        manual_values = []
-        for r in range(rows):
-            cols = st.columns(cols_per_row)
-            for c in range(cols_per_row):
-                idx = r * cols_per_row + c
-                if idx < n_features:
-                    short = feature_cols[idx][:20]
-                    v = cols[c].number_input(short, value=0.0, format="%.6f", key=f"f{idx}")
-                    manual_values.append(v)
-        values = np.array(manual_values).reshape(1, -1)
-
-# ──────────────────────────────────────
-# Predict
-# ──────────────────────────────────────
-st.divider()
-col_b1, col_b2, col_b3 = st.columns([1, 1, 1])
-with col_b2:
-    predict_click = st.button("🔍 Predict", type="primary", use_container_width=True)
-
-if predict_click and values is not None:
-    # Scale
-    X_scaled = scaler.transform(values)
-
-    # Get meta-features
-    p1 = lgbm_model.predict_proba(X_scaled)
-    p2 = bag_model.predict_proba(X_scaled)
-    M = np.hstack([p1, p2])
-
-    pred = meta_learner.predict(M)[0]
-    probs = meta_learner.predict_proba(M)[0]
-
-    pred_name = class_names[pred]
-    confidence = probs[pred]
-
-    # Result header
-    is_attack = pred != 0
-    color = "#e74c3c" if is_attack else "#2ecc71"
-    icon = "🚨" if is_attack else "✅"
-
-    st.markdown(f"""
-        <div style='text-align:center; padding:1.5rem; background:{color}22;
-                    border-radius:1rem; border:2px solid {color}'>
-            <h2 style='color:{color}'>{icon} {pred_name}</h2>
-            <p style='font-size:1.1rem'>Confidence: {confidence:.4f} ({confidence*100:.2f}%)</p>
-        </div>
-    """, unsafe_allow_html=True)
-
-    # Full probability distribution across all 15 classes
-    st.markdown("#### Full Probability Distribution (all classes)")
-    sorted_idx = np.argsort(probs)
-    sorted_names = [class_names[i] for i in sorted_idx]
-    sorted_probs = probs[sorted_idx]
-    bar_colors = ['#e74c3c' if n != class_names[0] else '#2ecc71' for n in sorted_names]
-
-    import plotly.graph_objects as go
-    fig = go.Figure(go.Bar(
-        x=sorted_probs,
-        y=sorted_names,
-        orientation='h',
-        marker_color=bar_colors,
-        text=[f'{p:.3f}' for p in sorted_probs],
-        textposition='outside',
-    ))
-    fig.update_layout(
-        height=450,
-        xaxis_title='Probability',
-        xaxis_range=[0, 1],
-        margin=dict(l=10, r=40, t=10, b=10),
-        showlegend=False,
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-    # Metrics row
-    col_m1, col_m2, col_m3 = st.columns(3)
-    with col_m1:
-        st.metric("Predicted Class", pred_name)
-    with col_m2:
-        st.metric("Confidence", f"{confidence:.4f}")
-    with col_m3:
-        harm = "ATTACK" if is_attack else "BENIGN"
-        st.metric("Classification", harm)
-
-elif predict_click:
-    st.warning("Please enter valid feature values first.")
+if __name__ == '__main__':
+    print('[NIDS] Starting Flask server on http://localhost:5000')
+    print('[NIDS] Open nids_dashboard.html and click [ MODE: SIM ] to go LIVE')
+    app.run(host='127.0.0.1', port=8080, debug=False)

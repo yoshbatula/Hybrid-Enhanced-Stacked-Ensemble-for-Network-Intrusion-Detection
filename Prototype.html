@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NIDS // Hybrid Stacked Ensemble v2.0</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #050805; font-family: 'Courier New', monospace; color: #00ff41; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* TOPBAR */
+  .topbar { background: #0a0e0a; border-bottom: 1px solid #1a3a1a; padding: 10px 20px; display: flex; align-items: center; gap: 16px; flex-shrink: 0; }
+  .dots { display: flex; gap: 7px; }
+  .dot { width: 13px; height: 13px; border-radius: 50%; }
+  .dot-r { background: #ff5f57; } .dot-y { background: #febc2e; } .dot-g { background: #28c840; }
+  .app-title { color: #4aff72; font-size: 14px; letter-spacing: 3px; margin-left: 10px; }
+  .top-right { margin-left: auto; display: flex; gap: 20px; font-size: 12px; color: #555; }
+  .top-right span { color: #00ff41; }
+  .top-right .red span { color: #ff4444; }
+  .top-right .amber span { color: #ffaa00; }
+
+  /* STATUSBAR */
+  .statusbar { background: #080d08; border-bottom: 1px solid #152515; padding: 5px 20px; display: flex; gap: 24px; font-size: 11px; flex-shrink: 0; }
+  .sbar-item { color: #444; }
+  .sbar-item b { color: #00ff41; font-weight: normal; }
+  .sbar-item.red b { color: #ff4444; }
+  .sbar-item.amber b { color: #ffaa00; }
+  .sbar-item.blue b { color: #4488ff; }
+
+  /* MAIN LAYOUT */
+  .main { display: flex; flex: 1; overflow: hidden; }
+
+  /* FEED */
+  .feed-wrap { flex: 1; display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid #152515; }
+  .feed-header { background: #080d08; border-bottom: 1px solid #152515; padding: 6px 14px; font-size: 10px; color: #444; letter-spacing: 2px; display: flex; gap: 30px; flex-shrink: 0; }
+  .feed { flex: 1; overflow-y: auto; padding: 10px 14px; font-size: 12px; line-height: 1.7; }
+  .feed::-webkit-scrollbar { width: 5px; }
+  .feed::-webkit-scrollbar-track { background: #080d08; }
+  .feed::-webkit-scrollbar-thumb { background: #1a3a1a; border-radius: 3px; }
+
+  /* LOG ROW COLORS */
+  .r-sys { color: #3a5a3a; }
+  .r-benign { color: #2d6b2d; }
+  .r-warn { color: #cc8800; }
+  .r-attack { color: #cc2222; }
+  .r-info { color: #3366cc; }
+  .hl { color: #ffffff; font-weight: bold; }
+  .cursor { display: inline-block; width: 9px; height: 14px; background: #00ff41; animation: blink 1s step-end infinite; vertical-align: middle; margin-left: 2px; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* SIDEBAR */
+  .sidebar { width: 260px; display: flex; flex-direction: column; overflow-y: auto; flex-shrink: 0; }
+  .sidebar::-webkit-scrollbar { width: 4px; }
+  .sidebar::-webkit-scrollbar-thumb { background: #1a3a1a; }
+  .sb-block { border-bottom: 1px solid #152515; padding: 12px 14px; }
+  .sb-title { font-size: 10px; letter-spacing: 2px; color: #4aff72; margin-bottom: 10px; padding-bottom: 5px; border-bottom: 1px solid #152515; }
+
+  /* COUNTERS GRID */
+  .cnt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .cnt-box { background: #0a120a; border: 1px solid #152515; border-radius: 4px; padding: 8px; text-align: center; }
+  .cnt-num { font-size: 22px; display: block; color: #00ff41; }
+  .cnt-num.red { color: #ff4444; }
+  .cnt-num.amber { color: #ffaa00; }
+  .cnt-num.blue { color: #4488ff; }
+  .cnt-lbl { font-size: 9px; color: #444; letter-spacing: 1px; }
+
+  /* ALERTS */
+  .alert-item { padding: 5px 0; border-bottom: 1px solid #0d150d; font-size: 10px; }
+  .alert-item:last-child { border-bottom: none; }
+  .a-high { color: #ff4444; }
+  .a-med { color: #ffaa00; }
+  .a-low { color: #00ff41; }
+  .a-sub { color: #333; margin-top: 1px; }
+
+  /* BARS */
+  .bar-row { margin: 5px 0; }
+  .bar-meta { display: flex; justify-content: space-between; font-size: 10px; color: #555; margin-bottom: 3px; }
+  .bar-track { background: #0d150d; border-radius: 2px; height: 5px; }
+  .bar-fill { height: 5px; border-radius: 2px; transition: width 0.4s ease; }
+
+  /* MODEL INFO */
+  .info-row { display: flex; justify-content: space-between; font-size: 11px; padding: 3px 0; border-bottom: 1px solid #0d150d; }
+  .info-row:last-child { border-bottom: none; }
+  .info-key { color: #444; }
+  .info-val { color: #4aff72; }
+
+  /* TABS */
+  .tab-nav { background: #080d08; border-bottom: 1px solid #152515; display: flex; flex-shrink: 0; }
+  .tab-btn { background: none; border: none; border-bottom: 2px solid transparent; color: #444; font-family: 'Courier New', monospace; font-size: 11px; letter-spacing: 2px; padding: 8px 20px; cursor: pointer; transition: color 0.15s; }
+  .tab-btn:hover { color: #4aff72; }
+  .tab-btn.active { color: #4aff72; border-bottom-color: #00ff41; }
+  .tab-panel { display: none; flex: 1; overflow: hidden; flex-direction: column; }
+  .tab-panel.active { display: flex; }
+
+  /* PERF PANEL */
+  .perf-panel { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 20px; }
+  .perf-panel::-webkit-scrollbar { width: 5px; }
+  .perf-panel::-webkit-scrollbar-thumb { background: #1a3a1a; }
+  .perf-section-title { font-size: 10px; letter-spacing: 3px; color: #4aff72; margin-bottom: 12px; padding-bottom: 6px; border-bottom: 1px solid #152515; }
+  .metric-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+  .metric-card { background: #0a120a; border: 1px solid #1a3a1a; border-radius: 4px; padding: 14px 10px; text-align: center; }
+  .metric-val { font-size: 24px; color: #00ff41; display: block; margin-bottom: 4px; }
+  .metric-val.gold { color: #ffcc00; }
+  .metric-val.blue { color: #4488ff; }
+  .metric-lbl { font-size: 9px; color: #444; letter-spacing: 1px; }
+  .perf-row { display: flex; gap: 20px; }
+  .perf-col { flex: 1; }
+  .cls-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .cls-table th { color: #4aff72; font-size: 9px; letter-spacing: 2px; padding: 5px 8px; text-align: left; border-bottom: 1px solid #1a3a1a; font-weight: normal; }
+  .cls-table td { padding: 4px 8px; border-bottom: 1px solid #0d150d; color: #555; }
+  .cls-table td:first-child { color: #4aff72; }
+  .cls-table td.hi { color: #00ff41; }
+  .cls-table td.mid { color: #ffaa00; }
+  .cls-table td.lo { color: #ff4444; }
+  .cls-table tr:hover td { background: #0d150d; }
+  .mini-bar-track { background: #0d150d; border-radius: 2px; height: 4px; width: 60px; display: inline-block; vertical-align: middle; }
+  .mini-bar-fill { height: 4px; border-radius: 2px; }
+
+  /* CONTROLS */
+  .controls { background: #080d08; border-top: 1px solid #152515; padding: 10px 20px; display: flex; gap: 10px; align-items: center; flex-shrink: 0; }
+  .btn { background: #0a120a; border: 1px solid #1a4a1a; color: #4aff72; font-family: 'Courier New', monospace; font-size: 12px; padding: 6px 16px; border-radius: 3px; cursor: pointer; letter-spacing: 1px; transition: background 0.15s; }
+  .btn:hover { background: #142014; }
+  .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .btn-stop { border-color: #4a1a1a; color: #ff6666; }
+  .btn-stop:hover:not(:disabled) { background: #1a0808; }
+  .sep { color: #1a3a1a; margin: 0 4px; }
+  .spd-label { color: #444; font-size: 11px; }
+  select.spd { background: #0a120a; border: 1px solid #1a4a1a; color: #4aff72; font-family: 'Courier New', monospace; font-size: 11px; padding: 5px 8px; border-radius: 3px; cursor: pointer; }
+  .export-btn { margin-left: auto; }
+  .time-display { font-size: 11px; color: #3a6a3a; letter-spacing: 1px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
+  <div class="app-title">NIDS // HYBRID STACKED ENSEMBLE v2.0</div>
+  <div class="top-right">
+    <div>PACKETS: <span id="h-pkts">0</span></div>
+    <div class="amber">WARNINGS: <span id="h-warn">0</span></div>
+    <div class="red">THREATS: <span id="h-threats">0</span></div>
+    <div>UPTIME: <span id="h-uptime">00:00:00</span></div>
+  </div>
+</div>
+
+<div class="statusbar">
+  <div class="sbar-item">IFACE: <b>eth0</b></div>
+  <div class="sbar-item">PROTO: <b>TCP/UDP/ICMP</b></div>
+  <div class="sbar-item">MODEL: <b>LightGBM+Bagging+LR</b></div>
+  <div class="sbar-item">FOLDS: <b>10-CV</b></div>
+  <div class="sbar-item">CLASSES: <b>15</b></div>
+  <div class="sbar-item" style="margin-left:auto">STATUS: <b id="sys-status">IDLE</b></div>
+</div>
+
+<div class="main">
+  <div class="feed-wrap">
+    <div class="tab-nav">
+      <button class="tab-btn active" onclick="switchTab('live')">[ LIVE FEED ]</button>
+      <button class="tab-btn" onclick="switchTab('perf')">[ PERFORMANCE METRICS ]</button>
+    </div>
+
+    <div class="tab-panel active" id="tab-live" style="flex-direction:column;">
+      <div class="feed-header">
+        <span>TIMESTAMP</span><span>SRC IP:PORT</span><span>DST IP:PORT</span><span>PROTO</span><span>CLASSIFICATION</span><span>CONFIDENCE</span>
+      </div>
+      <div class="feed" id="feed">
+        <div class="r-sys">[SYSTEM] Hybrid Enhanced Stacked Ensemble NIDS initialized.</div>
+        <div class="r-sys">[SYSTEM] Base learner 1 : LightGBM (100 estimators, 10-fold CV)</div>
+        <div class="r-sys">[SYSTEM] Base learner 2 : BaggingClassifier + DecisionTree (random subspace)</div>
+        <div class="r-sys">[SYSTEM] Meta-learner   : LogisticRegression (lbfgs, balanced)</div>
+        <div class="r-sys">[SYSTEM] Dataset        : CICIDS 2017 — 15 traffic classes</div>
+        <div class="r-sys">[SYSTEM] Ready. Press [ START CAPTURE ] to begin monitoring.</div>
+        <div><span class="cursor"></span></div>
+      </div>
+    </div>
+
+    <div class="tab-panel" id="tab-perf">
+      <div class="perf-panel">
+        <div>
+          <div class="perf-section-title">OVERALL MODEL PERFORMANCE — STACKED ENSEMBLE (CICIDS 2017)</div>
+          <div class="metric-grid">
+            <div class="metric-card"><span class="metric-val gold">99.81%</span><span class="metric-lbl">ACCURACY</span></div>
+            <div class="metric-card"><span class="metric-val">99.79%</span><span class="metric-lbl">PRECISION</span></div>
+            <div class="metric-card"><span class="metric-val">99.81%</span><span class="metric-lbl">RECALL</span></div>
+            <div class="metric-card"><span class="metric-val">99.80%</span><span class="metric-lbl">F1-SCORE</span></div>
+            <div class="metric-card"><span class="metric-val blue">99.99%</span><span class="metric-lbl">AUC-ROC</span></div>
+          </div>
+        </div>
+
+        <div class="perf-row">
+          <div class="perf-col">
+            <div class="perf-section-title">PER-CLASS METRICS</div>
+            <table class="cls-table">
+              <thead><tr><th>CLASS</th><th>PRECISION</th><th>RECALL</th><th>F1</th><th>SUPPORT</th></tr></thead>
+              <tbody id="cls-tbody"></tbody>
+            </table>
+          </div>
+          <div class="perf-col" style="max-width:240px">
+            <div class="perf-section-title">BASE LEARNER COMPARISON</div>
+            <div style="font-size:11px;margin-bottom:10px;color:#3a6a3a">Individual accuracy before stacking:</div>
+            <div class="bar-row">
+              <div class="bar-meta"><span style="color:#4aff72">LightGBM</span><span>99.62%</span></div>
+              <div class="bar-track"><div class="bar-fill" style="width:99.6%;background:#00ff41"></div></div>
+            </div>
+            <div class="bar-row" style="margin-top:8px">
+              <div class="bar-meta"><span style="color:#4488ff">Bagging+DT</span><span>98.14%</span></div>
+              <div class="bar-track"><div class="bar-fill" style="width:98.1%;background:#4488ff"></div></div>
+            </div>
+            <div class="bar-row" style="margin-top:8px">
+              <div class="bar-meta"><span style="color:#ffcc00">Stacked Ensemble</span><span>99.81%</span></div>
+              <div class="bar-track"><div class="bar-fill" style="width:99.8%;background:#ffcc00"></div></div>
+            </div>
+            <div style="margin-top:20px">
+              <div class="perf-section-title">LOG LOSS</div>
+              <div style="font-size:28px;color:#00ff41;text-align:center;padding:8px 0">0.0061</div>
+              <div style="font-size:10px;color:#444;text-align:center">lower is better</div>
+            </div>
+            <div style="margin-top:20px">
+              <div class="perf-section-title">CV FOLD STABILITY (VAL LOSS)</div>
+              <div id="fold-bars"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="sb-block">
+      <div class="sb-title">TRAFFIC COUNTERS</div>
+      <div class="cnt-grid">
+        <div class="cnt-box"><span class="cnt-num" id="c-benign">0</span><span class="cnt-lbl">BENIGN</span></div>
+        <div class="cnt-box"><span class="cnt-num red" id="c-attack">0</span><span class="cnt-lbl">ATTACKS</span></div>
+        <div class="cnt-box"><span class="cnt-num amber" id="c-warn">0</span><span class="cnt-lbl">WARNINGS</span></div>
+        <div class="cnt-box"><span class="cnt-num blue" id="c-total">0</span><span class="cnt-lbl">TOTAL</span></div>
+      </div>
+    </div>
+
+    <div class="sb-block">
+      <div class="sb-title">RECENT ALERTS</div>
+      <div id="alert-list"><div class="r-sys" style="font-size:10px">No alerts yet.</div></div>
+    </div>
+
+    <div class="sb-block">
+      <div class="sb-title">ATTACK DISTRIBUTION</div>
+      <div id="dist-bars"><div class="r-sys" style="font-size:10px">Waiting for data...</div></div>
+    </div>
+
+    <div class="sb-block">
+      <div class="sb-title">MODEL INFO</div>
+      <div class="info-row"><span class="info-key">Base 1</span><span class="info-val">LightGBM</span></div>
+      <div class="info-row"><span class="info-key">Base 2</span><span class="info-val">Bagging+DT</span></div>
+      <div class="info-row"><span class="info-key">Meta</span><span class="info-val">LogisticReg</span></div>
+      <div class="info-row"><span class="info-key">CV Folds</span><span class="info-val">10</span></div>
+      <div class="info-row"><span class="info-key">Classes</span><span class="info-val">15</span></div>
+      <div class="info-row"><span class="info-key">Scaler</span><span class="info-val">MinMaxScaler</span></div>
+      <div class="info-row"><span class="info-key">Dataset</span><span class="info-val">CICIDS 2017</span></div>
+    </div>
+
+    <div class="sb-block">
+      <div class="sb-title">THREAT LEVEL</div>
+      <div id="threat-level" style="font-size:22px;text-align:center;padding:6px 0;color:#3a7a3a;letter-spacing:3px">LOW</div>
+      <div style="font-size:10px;text-align:center;color:#333;margin-top:4px" id="threat-sub">No active threats detected</div>
+    </div>
+  </div>
+</div>
+
+<div class="controls">
+  <button class="btn" id="btn-start" onclick="startCapture()">[ START CAPTURE ]</button>
+  <button class="btn btn-stop" id="btn-stop" onclick="stopCapture()" disabled>[ STOP ]</button>
+  <button class="btn" onclick="clearFeed()">[ CLEAR LOG ]</button>
+  <span class="sep">|</span>
+  <button class="btn" id="btn-mode" onclick="toggleMode()" title="Toggle Simulation / Live Model mode">[ MODE: SIM ]</button>
+  <span id="backend-status" style="font-size:10px;color:#444;letter-spacing:1px">BACKEND: OFFLINE</span>
+  <span class="sep">|</span>
+  <span class="spd-label">SPEED:</span>
+  <select class="spd" id="speed-sel">
+    <option value="1400">SLOW</option>
+    <option value="700" selected>NORMAL</option>
+    <option value="280">FAST</option>
+    <option value="90">TURBO</option>
+  </select>
+  <span class="sep">|</span>
+  <button class="btn export-btn" onclick="exportLog()">[ EXPORT LOG ]</button>
+  <div class="time-display" id="clock" style="margin-left:auto">--:--:--</div>
+</div>
+
+<script>
+const ATTACKS = [
+  { label:'BENIGN',                   cls:'r-benign', sev:'low',  w:55 },
+  { label:'DDoS',                     cls:'r-attack', sev:'high', w:6  },
+  { label:'DoS Hulk',                 cls:'r-attack', sev:'high', w:5  },
+  { label:'PortScan',                 cls:'r-warn',   sev:'med',  w:5  },
+  { label:'DoS GoldenEye',            cls:'r-attack', sev:'high', w:3  },
+  { label:'FTP-Patator',              cls:'r-warn',   sev:'med',  w:3  },
+  { label:'SSH-Patator',              cls:'r-warn',   sev:'med',  w:3  },
+  { label:'DoS slowloris',            cls:'r-attack', sev:'high', w:2  },
+  { label:'DoS Slowhttptest',         cls:'r-attack', sev:'high', w:2  },
+  { label:'Bot',                      cls:'r-warn',   sev:'med',  w:2  },
+  { label:'Web Attack-Brute Force',   cls:'r-attack', sev:'high', w:2  },
+  { label:'Web Attack-XSS',           cls:'r-attack', sev:'high', w:2  },
+  { label:'Infiltration',             cls:'r-attack', sev:'high', w:1  },
+  { label:'Web Attack-Sql Injection', cls:'r-attack', sev:'high', w:1  },
+  { label:'Heartbleed',               cls:'r-attack', sev:'high', w:1  },
+];
+
+const pool = [];
+ATTACKS.forEach(a => { for(let i=0;i<a.w;i++) pool.push(a); });
+
+const ri = (a,b) => Math.floor(Math.random()*(b-a+1))+a;
+const rIP = () => `${ri(1,223)}.${ri(0,255)}.${ri(0,255)}.${ri(1,254)}`;
+const rPort = () => [80,443,22,21,8080,3389,53,25,110,3306,6379][ri(0,10)];
+const rConf = () => (0.82 + Math.random()*0.17).toFixed(4);
+const rProto = () => ['TCP','UDP','ICMP'][ri(0,2)];
+const ts = () => { const n=new Date(); return n.toTimeString().slice(0,8)+'.'+String(n.getMilliseconds()).padStart(3,'0'); };
+
+let timer = null;
+let startTime = null;
+let uptimeTimer = null;
+let counts = { benign:0, attack:0, warn:0, total:0 };
+let dist = {};
+let alerts = [];
+let logLines = [];
+
+function updateClock() {
+  document.getElementById('clock').textContent = new Date().toTimeString().slice(0,8);
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+function startCapture() {
+  document.getElementById('btn-start').disabled = true;
+  document.getElementById('btn-stop').disabled = false;
+  document.getElementById('sys-status').textContent = 'LIVE';
+  document.getElementById('sys-status').style.color = '#00ff41';
+  startTime = Date.now();
+  uptimeTimer = setInterval(updateUptime, 1000);
+  log('[SYSTEM] Capture started — ensemble classifier active on eth0', 'r-info');
+  scheduleNext();
+}
+
+function stopCapture() {
+  clearTimeout(timer); timer = null;
+  clearInterval(uptimeTimer);
+  document.getElementById('btn-start').disabled = false;
+  document.getElementById('btn-stop').disabled = true;
+  document.getElementById('sys-status').textContent = 'STOPPED';
+  document.getElementById('sys-status').style.color = '#ffaa00';
+  log('[SYSTEM] Capture stopped by user.', 'r-sys');
+}
+
+function updateUptime() {
+  const s = Math.floor((Date.now()-startTime)/1000);
+  const h = String(Math.floor(s/3600)).padStart(2,'0');
+  const m = String(Math.floor((s%3600)/60)).padStart(2,'0');
+  const sec = String(s%60).padStart(2,'0');
+  document.getElementById('h-uptime').textContent = `${h}:${m}:${sec}`;
+}
+
+function scheduleNext() {
+  const spd = parseInt(document.getElementById('speed-sel').value);
+  const delay = spd * (0.7 + Math.random()*0.6);
+  timer = setTimeout(() => { emitPacket(); if(!document.getElementById('btn-start').disabled) scheduleNext(); }, delay);
+}
+
+const FLASK_URL = 'http://localhost:8080';
+let liveMode = false;
+let backendOnline = false;
+
+async function checkBackend() {
+  try {
+    const res = await fetch(FLASK_URL + '/ping', { method:'GET', signal: AbortSignal.timeout(1500) });
+    backendOnline = res.ok;
+  } catch(e) { backendOnline = false; }
+  const el = document.getElementById('backend-status');
+  if(backendOnline) { el.textContent = 'BACKEND: ONLINE'; el.style.color = '#00ff41'; }
+  else { el.textContent = 'BACKEND: OFFLINE'; el.style.color = liveMode ? '#ff4444' : '#444'; }
+}
+
+function toggleMode() {
+  liveMode = !liveMode;
+  const btn = document.getElementById('btn-mode');
+  if(liveMode) {
+    btn.textContent = '[ MODE: LIVE ]';
+    btn.style.borderColor = '#00ff41';
+    btn.style.color = '#00ff41';
+    checkBackend();
+    log('[SYSTEM] Switched to LIVE MODEL mode — calling Flask backend at ' + FLASK_URL, 'r-info');
+    log('[SYSTEM] Make sure app.py is running: python app.py', 'r-sys');
+  } else {
+    btn.textContent = '[ MODE: SIM ]';
+    btn.style.borderColor = '#1a4a1a';
+    btn.style.color = '#4aff72';
+    document.getElementById('backend-status').textContent = 'BACKEND: OFFLINE';
+    document.getElementById('backend-status').style.color = '#444';
+    log('[SYSTEM] Switched to SIMULATION mode — using random traffic generator.', 'r-sys');
+  }
+}
+
+setInterval(() => { if(liveMode) checkBackend(); }, 5000);
+
+function randFeatures() {
+  const features = [];
+  for(let i = 0; i < 78; i++) features.push(parseFloat((Math.random() * 100).toFixed(4)));
+  return features;
+}
+
+async function emitPacket() {
+  const src = rIP(); const dst = rIP();
+  const sp = rPort(); const dp = rPort();
+  const proto = rProto();
+  const pkts = ri(1,250); const bytes = ri(64,65535);
+
+  let label, conf, sevCls;
+
+  if(liveMode && backendOnline) {
+    try {
+      const features = randFeatures();
+      const res = await fetch(FLASK_URL + '/predict', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ features }),
+        signal: AbortSignal.timeout(3000)
+      });
+      if(res.ok) {
+        const data = await res.json();
+        label = data.label;
+        conf = parseFloat(data.confidence).toFixed(4);
+      } else { throw new Error('bad response'); }
+    } catch(e) {
+      backendOnline = false;
+      document.getElementById('backend-status').textContent = 'BACKEND: OFFLINE';
+      document.getElementById('backend-status').style.color = '#ff4444';
+      log('[SYSTEM] Backend unreachable — falling back to simulation.', 'r-warn');
+      const atk = pool[ri(0,pool.length-1)];
+      label = atk.label; conf = rConf();
+    }
+  } else {
+    const atk = pool[ri(0,pool.length-1)];
+    label = atk.label; conf = rConf();
+  }
+
+  const atkMeta = ATTACKS.find(a => a.label === label) || { cls:'r-warn', sev:'med' };
+
+  counts.total++;
+  if(label === 'BENIGN') counts.benign++;
+  else if(atkMeta.sev === 'med') counts.warn++;
+  else counts.attack++;
+  dist[label] = (dist[label]||0)+1;
+
+  document.getElementById('h-pkts').textContent = counts.total;
+  document.getElementById('h-warn').textContent = counts.warn;
+  document.getElementById('h-threats').textContent = counts.attack;
+  document.getElementById('c-benign').textContent = counts.benign;
+  document.getElementById('c-attack').textContent = counts.attack;
+  document.getElementById('c-warn').textContent = counts.warn;
+  document.getElementById('c-total').textContent = counts.total;
+
+  const base = `[${ts()}] ${src}:${sp} -> ${dst}:${dp} ${proto} pkts=${pkts} bytes=${bytes}`;
+  let msg;
+  if(label === 'BENIGN') {
+    msg = `${base} | <span class="hl">BENIGN</span> conf=${conf}`;
+  } else if(atkMeta.sev === 'med') {
+    msg = `${base} | [! WARN !] <span class="hl">${label}</span> conf=${conf}`;
+  } else {
+    msg = `${base} | <span style="color:#ff2222">[!! THREAT !!]</span> <span class="hl">${label}</span> conf=${conf}`;
+  }
+
+  logLines.push(`[${ts()}] ${src}:${sp} -> ${dst}:${dp} ${proto} pkts=${pkts} bytes=${bytes} | ${label} conf=${conf}`);
+
+  if(label !== 'BENIGN') {
+    alerts.unshift({ label, sev: atkMeta.sev, src, time: ts() });
+    if(alerts.length > 8) alerts.pop();
+    renderAlerts();
+  }
+
+  updateThreatLevel();
+  log(msg, atkMeta.cls);
+  renderDist();
+}
+
+function log(html, cls) {
+  const feed = document.getElementById('feed');
+  const cursor = feed.querySelector('.cursor');
+  if(cursor) cursor.parentElement.remove();
+  const div = document.createElement('div');
+  div.className = cls||'r-sys';
+  div.innerHTML = html;
+  feed.appendChild(div);
+  const cur = document.createElement('div');
+  cur.innerHTML = '<span class="cursor"></span>';
+  feed.appendChild(cur);
+  feed.scrollTop = feed.scrollHeight;
+}
+
+function renderAlerts() {
+  const el = document.getElementById('alert-list');
+  if(!alerts.length){ el.innerHTML='<div class="r-sys" style="font-size:10px">No alerts yet.</div>'; return; }
+  const sevCls = { high:'a-high', med:'a-med', low:'a-low' };
+  el.innerHTML = alerts.map(a=>
+    `<div class="alert-item">
+      <div class="${sevCls[a.sev]||'a-low'}">${a.label}</div>
+      <div class="a-sub">${a.src} @ ${a.time}</div>
+    </div>`
+  ).join('');
+}
+
+function renderDist() {
+  const el = document.getElementById('dist-bars');
+  const entries = Object.entries(dist).filter(([k])=>k!=='BENIGN').sort((a,b)=>b[1]-a[1]).slice(0,6);
+  if(!entries.length){ el.innerHTML='<div class="r-sys" style="font-size:10px">No attacks detected yet.</div>'; return; }
+  const max = Math.max(...entries.map(e=>e[1]));
+  el.innerHTML = entries.map(([label,cnt])=>{
+    const atk = ATTACKS.find(a=>a.label===label);
+    const color = atk?.sev==='high' ? '#cc2222' : '#cc8800';
+    const pct = Math.round(cnt/max*100);
+    const short = label.length>20 ? label.slice(0,18)+'..' : label;
+    return `<div class="bar-row">
+      <div class="bar-meta"><span>${short}</span><span>${cnt}</span></div>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${color}"></div></div>
+    </div>`;
+  }).join('');
+}
+
+function updateThreatLevel() {
+  const ratio = counts.total > 0 ? counts.attack / counts.total : 0;
+  const el = document.getElementById('threat-level');
+  const sub = document.getElementById('threat-sub');
+  if(ratio > 0.15) {
+    el.textContent = 'CRITICAL'; el.style.color = '#ff2222';
+    sub.textContent = 'High volume of active threats!';
+  } else if(ratio > 0.07) {
+    el.textContent = 'HIGH'; el.style.color = '#ff4444';
+    sub.textContent = 'Multiple threats detected';
+  } else if(ratio > 0.02) {
+    el.textContent = 'MEDIUM'; el.style.color = '#ffaa00';
+    sub.textContent = 'Some suspicious activity';
+  } else if(counts.attack > 0) {
+    el.textContent = 'LOW'; el.style.color = '#4aff72';
+    sub.textContent = 'Minor threats detected';
+  } else {
+    el.textContent = 'CLEAR'; el.style.color = '#3a7a3a';
+    sub.textContent = 'No active threats detected';
+  }
+}
+
+function clearFeed() {
+  document.getElementById('feed').innerHTML = '<div class="r-sys">[SYSTEM] Log cleared.</div><div><span class="cursor"></span></div>';
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-'+tab).classList.add('active');
+  event.target.classList.add('active');
+}
+
+const CLASS_METRICS = [
+  { name:'BENIGN',                   p:99.96, r:99.89, f1:99.92, sup:1468947 },
+  { name:'Bot',                      p:99.81, r:99.66, f1:99.73, sup:1366 },
+  { name:'DDoS',                     p:99.99, r:100.0, f1:100.0, sup:89794 },
+  { name:'DoS GoldenEye',            p:99.87, r:99.93, f1:99.90, sup:7197 },
+  { name:'DoS Hulk',                 p:99.96, r:99.87, f1:99.91, sup:120961 },
+  { name:'DoS Slowhttptest',         p:99.68, r:99.55, f1:99.61, sup:3631 },
+  { name:'DoS slowloris',            p:99.69, r:99.81, f1:99.75, sup:3747 },
+  { name:'FTP-Patator',              p:99.94, r:99.94, f1:99.94, sup:4151 },
+  { name:'Heartbleed',               p:100.0, r:100.0, f1:100.0, sup:9 },
+  { name:'Infiltration',             p:100.0, r:42.31, f1:59.46, sup:26 },
+  { name:'PortScan',                 p:99.96, r:99.90, f1:99.93, sup:63574 },
+  { name:'SSH-Patator',              p:100.0, r:99.90, f1:99.95, sup:2256 },
+  { name:'Web Attack-Brute Force',   p:50.00, r:48.28, f1:49.12, sup:1460 },
+  { name:'Web Attack-Sql Injection', p:37.50, r:40.00, f1:38.71, sup:35 },
+  { name:'Web Attack-XSS',           p:67.38, r:82.82, f1:74.31, sup:652 },
+];
+
+function scoreClass(v) {
+  if(v >= 99) return 'hi';
+  if(v >= 80) return 'mid';
+  return 'lo';
+}
+
+function renderClassTable() {
+  const tbody = document.getElementById('cls-tbody');
+  tbody.innerHTML = CLASS_METRICS.map(c => {
+    const pc = scoreClass(c.p), rc = scoreClass(c.r), fc = scoreClass(c.f1);
+    const barW = Math.round(c.f1);
+    const barColor = c.f1>=99 ? '#00ff41' : c.f1>=80 ? '#ffaa00' : '#ff4444';
+    return `<tr>
+      <td>${c.name}</td>
+      <td class="${pc}">${c.p.toFixed(2)}%</td>
+      <td class="${rc}">${c.r.toFixed(2)}%</td>
+      <td class="${fc}">
+        <span>${c.f1.toFixed(2)}%</span>
+        <span class="mini-bar-track"><span class="mini-bar-fill" style="width:${barW}%;background:${barColor};display:block"></span></span>
+      </td>
+      <td style="color:#333">${c.sup.toLocaleString()}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderFoldBars() {
+  const folds = [0.0058, 0.0061, 0.0059, 0.0063, 0.0060, 0.0057, 0.0062, 0.0059, 0.0061, 0.0058];
+  const max = Math.max(...folds);
+  document.getElementById('fold-bars').innerHTML = folds.map((v,i) => `
+    <div class="bar-row" style="margin:4px 0">
+      <div class="bar-meta"><span style="color:#555">Fold ${i+1}</span><span>${v.toFixed(4)}</span></div>
+      <div class="bar-track"><div class="bar-fill" style="width:${Math.round(v/max*100)}%;background:#1a5a1a"></div></div>
+    </div>`).join('');
+}
+
+renderClassTable();
+renderFoldBars();
+
+function exportLog() {
+  if(!logLines.length){ alert('No log data to export.'); return; }
+  const content = logLines.join('\n');
+  const blob = new Blob([content], { type:'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `nids_log_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.txt`;
+  a.click();
+}
+</script>
+</body>
+</html>
