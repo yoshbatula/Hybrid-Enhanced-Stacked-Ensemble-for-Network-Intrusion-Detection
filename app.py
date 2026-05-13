@@ -164,40 +164,53 @@ if predict_click and values is not None:
     pred_name = class_names[pred]
     confidence = probs[pred]
 
-    # Top-3
-    top3_idx = np.argsort(probs)[-3:][::-1]
-    top3 = [(class_names[i], probs[i]) for i in top3_idx]
-
-    # Result
+    # Result header
     is_attack = pred != 0
     color = "#e74c3c" if is_attack else "#2ecc71"
     icon = "🚨" if is_attack else "✅"
-    label = f"{icon} {pred_name}"
-    sub = f"Confidence: {confidence:.4f} ({confidence*100:.2f}%)"
 
     st.markdown(f"""
-        <div style='text-align:center; padding:2rem; background:{color}22;
+        <div style='text-align:center; padding:1.5rem; background:{color}22;
                     border-radius:1rem; border:2px solid {color}'>
-            <h2 style='color:{color}'>{label}</h2>
-            <p style='font-size:1.2rem'>{sub}</p>
+            <h2 style='color:{color}'>{icon} {pred_name}</h2>
+            <p style='font-size:1.1rem'>Confidence: {confidence:.4f} ({confidence*100:.2f}%)</p>
         </div>
     """, unsafe_allow_html=True)
 
-    # Confidence bar
-    st.markdown("#### Confidence")
-    st.progress(float(confidence))
+    # Full probability distribution across all 15 classes
+    st.markdown("#### Full Probability Distribution (all classes)")
+    sorted_idx = np.argsort(probs)
+    sorted_names = [class_names[i] for i in sorted_idx]
+    sorted_probs = probs[sorted_idx]
+    bar_colors = ['#e74c3c' if n != class_names[0] else '#2ecc71' for n in sorted_names]
 
-    # Top-3
-    st.markdown("#### Top-3 Predictions")
-    for i, (name, prob) in enumerate(top3):
-        c = "#e74c3c" if name != class_names[0] else "#2ecc71"
-        st.markdown(f"""
-            <div style='display:flex; justify-content:space-between; padding:0.3rem 0'>
-                <span><b>{i+1}.</b> <span style='color:{c}'>{name}</span></span>
-                <span>{prob:.4f} ({prob*100:.1f}%)</span>
-            </div>
-        """, unsafe_allow_html=True)
-        st.progress(float(prob))
+    import plotly.graph_objects as go
+    fig = go.Figure(go.Bar(
+        x=sorted_probs,
+        y=sorted_names,
+        orientation='h',
+        marker_color=bar_colors,
+        text=[f'{p:.3f}' for p in sorted_probs],
+        textposition='outside',
+    ))
+    fig.update_layout(
+        height=450,
+        xaxis_title='Probability',
+        xaxis_range=[0, 1],
+        margin=dict(l=10, r=40, t=10, b=10),
+        showlegend=False,
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+    # Metrics row
+    col_m1, col_m2, col_m3 = st.columns(3)
+    with col_m1:
+        st.metric("Predicted Class", pred_name)
+    with col_m2:
+        st.metric("Confidence", f"{confidence:.4f}")
+    with col_m3:
+        harm = "ATTACK" if is_attack else "BENIGN"
+        st.metric("Classification", harm)
 
 elif predict_click:
     st.warning("Please enter valid feature values first.")
