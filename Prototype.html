@@ -392,11 +392,11 @@
         <div>
           <div class="perf-section-title">OVERALL MODEL PERFORMANCE — STACKED ENSEMBLE (CICIDS 2017)</div>
           <div class="metric-grid">
-            <div class="metric-card"><span class="metric-val gold">99.81%</span><span class="metric-lbl">ACCURACY</span></div>
-            <div class="metric-card"><span class="metric-val">99.79%</span><span class="metric-lbl">PRECISION</span></div>
-            <div class="metric-card"><span class="metric-val">99.81%</span><span class="metric-lbl">RECALL</span></div>
-            <div class="metric-card"><span class="metric-val">99.80%</span><span class="metric-lbl">F1-SCORE</span></div>
-            <div class="metric-card"><span class="metric-val blue">99.99%</span><span class="metric-lbl">AUC-ROC</span></div>
+            <div class="metric-card"><span class="metric-val gold">95.87%</span><span class="metric-lbl">ACCURACY</span></div>
+            <div class="metric-card"><span class="metric-val">99.84%</span><span class="metric-lbl">PRECISION</span></div>
+            <div class="metric-card"><span class="metric-val">95.87%</span><span class="metric-lbl">RECALL</span></div>
+            <div class="metric-card"><span class="metric-val">97.78%</span><span class="metric-lbl">F1-SCORE</span></div>
+            <div class="metric-card"><span class="metric-val blue">99.98%</span><span class="metric-lbl">AUC-ROC</span></div>
           </div>
         </div>
 
@@ -412,25 +412,21 @@
             <div class="perf-section-title">BASE LEARNER COMPARISON</div>
             <div style="font-size:11px;margin-bottom:10px;color:#4a6d9c">Individual accuracy before stacking:</div>
             <div class="bar-row">
-              <div class="bar-meta"><span style="color:#4aff72">LightGBM</span><span>99.62%</span></div>
-              <div class="bar-track"><div class="bar-fill" style="width:99.6%;background:#4ec9b0"></div></div>
+              <div class="bar-meta"><span style="color:#4aff72">LightGBM</span><span>99.88%</span></div>
+              <div class="bar-track"><div class="bar-fill" style="width:99.88%;background:#4ec9b0"></div></div>
             </div>
             <div class="bar-row" style="margin-top:8px">
-              <div class="bar-meta"><span style="color:#4488ff">Bagging+DT</span><span>98.14%</span></div>
-              <div class="bar-track"><div class="bar-fill" style="width:98.1%;background:#4488ff"></div></div>
+              <div class="bar-meta"><span style="color:#4488ff">Bagging+DT</span><span>95.41%</span></div>
+              <div class="bar-track"><div class="bar-fill" style="width:95.41%;background:#4488ff"></div></div>
             </div>
             <div class="bar-row" style="margin-top:8px">
-              <div class="bar-meta"><span style="color:#ffcc00">Stacked Ensemble</span><span>99.81%</span></div>
-              <div class="bar-track"><div class="bar-fill" style="width:99.8%;background:#ffcc00"></div></div>
+              <div class="bar-meta"><span style="color:#ffcc00">Stacked Ensemble</span><span>95.87%</span></div>
+              <div class="bar-track"><div class="bar-fill" style="width:95.87%;background:#ffcc00"></div></div>
             </div>
             <div style="margin-top:20px">
               <div class="perf-section-title">LOG LOSS</div>
-              <div style="font-size:28px;color:#4ec9b0;text-align:center;padding:8px 0">0.0061</div>
+              <div style="font-size:28px;color:#4ec9b0;text-align:center;padding:8px 0">0.1620</div>
               <div style="font-size:10px;color:#444;text-align:center">lower is better</div>
-            </div>
-            <div style="margin-top:20px">
-              <div class="perf-section-title">CV FOLD STABILITY (VAL LOSS)</div>
-              <div id="fold-bars"></div>
             </div>
           </div>
         </div>
@@ -721,18 +717,7 @@ function renderClassTable() {
   }).join('');
 }
 
-function renderFoldBars() {
-  const folds = [0.0058, 0.0061, 0.0059, 0.0063, 0.0060, 0.0057, 0.0062, 0.0059, 0.0061, 0.0058];
-  const max = Math.max(...folds);
-  document.getElementById('fold-bars').innerHTML = folds.map((v,i) => `
-    <div class="bar-row" style="margin:4px 0">
-      <div class="bar-meta"><span style="color:#4a6d9c">Fold ${i+1}</span><span>${v.toFixed(4)}</span></div>
-      <div class="bar-track"><div class="bar-fill" style="width:${Math.round(v/max*100)}%;background:#1b4f8a"></div></div>
-    </div>`).join('');
-}
-
 renderClassTable();
-renderFoldBars();
 
 const featureInput = document.getElementById('feature-input');
 const inputLine = document.getElementById('input-line');
