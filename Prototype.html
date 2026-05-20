@@ -771,7 +771,7 @@ featureInput.addEventListener('keydown', async (e) => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ features }),
-        signal: AbortSignal.timeout(3000)
+        signal: AbortSignal.timeout(10000)
       });
 
       loadingDiv.remove();
