@@ -63,14 +63,8 @@ def predict():
 
         if MODEL_LOADED:
             scaled = scaler.transform(features)
-            n_meta = meta.n_features_in_ // 2  # expected classes per base model
-            p1 = lgbm_model.predict_proba(scaled)   # may have fewer classes
+            p1 = lgbm_model.predict_proba(scaled)
             p2 = bagging_model.predict_proba(scaled)
-            # Pad if base models have fewer classes than meta expects
-            if p1.shape[1] < n_meta:
-                pad = np.zeros((p1.shape[0], n_meta - p1.shape[1]))
-                p1 = np.hstack([p1, pad])
-                p2 = np.hstack([p2, pad])
             meta_input = np.hstack([p1, p2])
             pred = meta.predict(meta_input)
             conf = float(meta.predict_proba(meta_input).max())
