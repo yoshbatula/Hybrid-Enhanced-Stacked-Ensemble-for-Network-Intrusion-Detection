@@ -737,10 +737,10 @@ async function initializeMetrics() {
     if (res.ok) {
       const data = await res.json();
       document.getElementById('metric-accuracy').textContent = (data.accuracy * 100).toFixed(2) + '%';
-      document.getElementById('metric-precision').textContent = (data.precision_macro * 100).toFixed(2) + '%';
-      document.getElementById('metric-recall').textContent = (data.recall_macro * 100).toFixed(2) + '%';
-      document.getElementById('metric-f1').textContent = (data.f1_macro * 100).toFixed(2) + '%';
-      document.getElementById('metric-auc').textContent = (data.auc_roc_macro * 100).toFixed(2) + '%';
+      document.getElementById('metric-precision').textContent = (data.precision * 100).toFixed(2) + '%';
+      document.getElementById('metric-recall').textContent = (data.recall * 100).toFixed(2) + '%';
+      document.getElementById('metric-f1').textContent = (data.f1 * 100).toFixed(2) + '%';
+      document.getElementById('metric-auc').textContent = (data.auc_roc * 100).toFixed(2) + '%';
       return;
     }
   } catch (err) {

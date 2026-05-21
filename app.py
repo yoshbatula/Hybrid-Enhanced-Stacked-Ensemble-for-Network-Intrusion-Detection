@@ -113,14 +113,14 @@ def get_model_metrics():
     These are from the best fold (Fold #5) of training.
     """
     return jsonify({
-        'accuracy': 0.9762,
-        'precision_macro': 0.9565,
-        'recall_macro': 0.9631,
-        'f1_macro': 0.9597,
-        'auc_roc_macro': 0.9880,
-        'best_fold': 5,
-        'training_method': '10-Fold Stratified CV with SMOTE (15% oversampling)',
-        'base_learners': ['LightGBM (100 trees)', 'Bagging with Decision Trees (15 trees)'],
+        'accuracy': 0.9723,
+        'precision': 0.9984,
+        'recall': 0.9723,
+        'f1': 0.9850,
+        'auc_roc': 0.9998,
+        'best_fold': 9,
+        'training_method': '10-Fold Stratified CV with SMOTE (2% undersampling) + Class Weights',
+        'base_learners': ['LightGBM (100 trees)', 'Bagging with Decision Trees (50 trees)'],
         'meta_learner': 'Logistic Regression'
     })
 
@@ -130,22 +130,24 @@ def get_class_metrics():
     Returns per-class metrics (Precision, Recall, F1-Score, Support).
     These represent performance for each attack class.
     """
+    # Values from test set (0.9723 accuracy, 0.9984 weighted precision)
+    # See v4 notebook output for full classification report
     class_metrics = [
-        {'name': 'BENIGN', 'p': 97.50, 'r': 99.20, 'f1': 98.34, 'sup': 380000},
-        {'name': 'DDoS', 'p': 99.10, 'r': 98.90, 'f1': 99.00, 'sup': 25000},
-        {'name': 'DoS Hulk', 'p': 98.75, 'r': 99.05, 'f1': 98.90, 'sup': 42000},
-        {'name': 'PortScan', 'p': 98.20, 'r': 97.80, 'f1': 98.00, 'sup': 22000},
-        {'name': 'DoS GoldenEye', 'p': 97.60, 'r': 98.40, 'f1': 98.00, 'sup': 2500},
-        {'name': 'FTP-Patator', 'p': 96.80, 'r': 97.20, 'f1': 97.00, 'sup': 1450},
-        {'name': 'SSH-Patator', 'p': 97.40, 'r': 96.80, 'f1': 97.10, 'sup': 780},
-        {'name': 'DoS slowloris', 'p': 95.60, 'r': 94.80, 'f1': 95.20, 'sup': 1300},
-        {'name': 'DoS Slowhttptest', 'p': 96.20, 'r': 95.60, 'f1': 95.90, 'sup': 1100},
-        {'name': 'Bot', 'p': 94.80, 'r': 93.60, 'f1': 94.20, 'sup': 480},
-        {'name': 'Web Attack-Brute Force', 'p': 92.40, 'r': 91.20, 'f1': 91.80, 'sup': 510},
-        {'name': 'Web Attack-XSS', 'p': 88.60, 'r': 87.40, 'f1': 88.00, 'sup': 230},
-        {'name': 'Infiltration', 'p': 85.20, 'r': 84.00, 'f1': 84.60, 'sup': 35},
-        {'name': 'Web Attack-Sql Injection', 'p': 83.40, 'r': 82.20, 'f1': 82.80, 'sup': 12},
-        {'name': 'Heartbleed', 'p': 100.0, 'r': 100.0, 'f1': 100.0, 'sup': 3},
+        {'name': 'BENIGN', 'p': 100.00, 'r': 96.78, 'f1': 98.36, 'sup': 628518},
+        {'name': 'Bot', 'p': 47.55, 'r': 99.83, 'f1': 64.42, 'sup': 584},
+        {'name': 'DDoS', 'p': 99.88, 'r': 99.99, 'f1': 99.93, 'sup': 38404},
+        {'name': 'DoS GoldenEye', 'p': 97.37, 'r': 99.61, 'f1': 98.48, 'sup': 3086},
+        {'name': 'DoS Hulk', 'p': 99.84, 'r': 99.15, 'f1': 99.49, 'sup': 51854},
+        {'name': 'DoS Slowhttptest', 'p': 91.50, 'r': 99.55, 'f1': 95.36, 'sup': 1568},
+        {'name': 'DoS slowloris', 'p': 98.40, 'r': 99.20, 'f1': 98.80, 'sup': 1616},
+        {'name': 'FTP-Patator', 'p': 99.61, 'r': 99.94, 'f1': 99.78, 'sup': 1779},
+        {'name': 'Heartbleed', 'p': 60.00, 'r': 100.0, 'f1': 75.00, 'sup': 3},
+        {'name': 'Infiltration', 'p': 0.06, 'r': 100.0, 'f1': 0.12, 'sup': 11},
+        {'name': 'PortScan', 'p': 98.93, 'r': 99.94, 'f1': 99.43, 'sup': 27208},
+        {'name': 'SSH-Patator', 'p': 98.87, 'r': 100.0, 'f1': 99.43, 'sup': 966},
+        {'name': 'Web Attack \ufffd Brute Force', 'p': 81.10, 'r': 53.51, 'f1': 64.48, 'sup': 441},
+        {'name': 'Web Attack \ufffd Sql Injection', 'p': 1.06, 'r': 100.0, 'f1': 2.09, 'sup': 6},
+        {'name': 'Web Attack \ufffd XSS', 'p': 32.68, 'r': 76.02, 'f1': 45.71, 'sup': 196},
     ]
     return jsonify({'class_metrics': class_metrics})
 
