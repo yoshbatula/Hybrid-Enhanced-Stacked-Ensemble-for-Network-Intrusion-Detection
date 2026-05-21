@@ -399,13 +399,27 @@
           </div>
         </div>
 
-        <div class="perf-row">
+        <div class="perf-row" id="current-class-row" style="display:none">
           <div class="perf-col">
-            <div class="perf-section-title">PER-CLASS METRICS</div>
-            <table class="cls-table">
-              <thead><tr><th>CLASS</th><th>PRECISION</th><th>RECALL</th><th>F1</th><th>SUPPORT</th></tr></thead>
-              <tbody id="cls-tbody"></tbody>
-            </table>
+            <div class="perf-section-title">CURRENT PREDICTION PERFORMANCE</div>
+            <div id="current-class-detail" style="background:#001c3d;border:1px solid #1b4f8a;border-radius:3px;padding:16px;">
+              <div style="font-size:18px;color:#9cdcfe;margin-bottom:12px" id="cc-name">--</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+                <div style="background:#012456;border:1px solid #0e3460;border-radius:3px;padding:10px;text-align:center">
+                  <div style="font-size:20px;color:#4ec9b0" id="cc-prec">0.00%</div>
+                  <div style="font-size:9px;color:#4a6d9c;letter-spacing:1px">PRECISION</div>
+                </div>
+                <div style="background:#012456;border:1px solid #0e3460;border-radius:3px;padding:10px;text-align:center">
+                  <div style="font-size:20px;color:#4ec9b0" id="cc-recall">0.00%</div>
+                  <div style="font-size:9px;color:#4a6d9c;letter-spacing:1px">RECALL</div>
+                </div>
+                <div style="background:#012456;border:1px solid #0e3460;border-radius:3px;padding:10px;text-align:center">
+                  <div style="font-size:20px;color:#dcdcaa" id="cc-f1">0.00%</div>
+                  <div style="font-size:9px;color:#4a6d9c;letter-spacing:1px">F1-SCORE</div>
+                </div>
+              </div>
+              <div style="margin-top:8px;font-size:10px;color:#4a6d9c" id="cc-sup"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -491,6 +505,25 @@ const CLASS_NAMES = [
   'DoS slowloris','FTP-Patator','Heartbleed','Infiltration','PortScan',
   'SSH-Patator','Web Attack-Brute Force','Web Attack-Sql Injection','Web Attack-XSS'
 ];
+
+// Training metrics from v4 notebook (10-fold CV test set)
+const CLASS_TRAINING_METRICS = {
+  'BENIGN':                   { p:1.0000, r:0.9678, f1:0.9836, sup:628518 },
+  'Bot':                      { p:0.4755, r:0.9983, f1:0.6442, sup:584 },
+  'DDoS':                     { p:0.9988, r:0.9999, f1:0.9993, sup:38404 },
+  'DoS GoldenEye':            { p:0.9737, r:0.9961, f1:0.9848, sup:3086 },
+  'DoS Hulk':                 { p:0.9984, r:0.9915, f1:0.9949, sup:51854 },
+  'DoS Slowhttptest':         { p:0.9150, r:0.9955, f1:0.9536, sup:1568 },
+  'DoS slowloris':            { p:0.9840, r:0.9920, f1:0.9880, sup:1616 },
+  'FTP-Patator':              { p:0.9961, r:0.9994, f1:0.9978, sup:1779 },
+  'Heartbleed':               { p:0.6000, r:1.0000, f1:0.7500, sup:3 },
+  'Infiltration':             { p:0.0006, r:1.0000, f1:0.0012, sup:11 },
+  'PortScan':                 { p:0.9893, r:0.9994, f1:0.9943, sup:27208 },
+  'SSH-Patator':              { p:0.9887, r:1.0000, f1:0.9943, sup:966 },
+  'Web Attack-Brute Force':   { p:0.8110, r:0.5351, f1:0.6448, sup:441 },
+  'Web Attack-Sql Injection': { p:0.0106, r:1.0000, f1:0.0209, sup:6 },
+  'Web Attack-XSS':           { p:0.3268, r:0.7602, f1:0.4571, sup:196 },
+};
 
 function updateClock() {
   document.getElementById('clock').textContent = new Date().toTimeString().slice(0,8);
@@ -659,81 +692,20 @@ function updateThreatLevel() {
   }
 }
 
-function updateLiveMetrics() {
-  const labeled = predictions.filter(p => p.trueLabel !== null);
-  const total = labeled.length;
-  if (total === 0) return;
+function showClassMetrics(label) {
+  const row = document.getElementById('current-class-row');
+  const metrics = CLASS_TRAINING_METRICS[label];
+  if (!metrics) { row.style.display = 'none'; return; }
 
-  const correct = labeled.filter(p => p.trueLabel.toLowerCase().replace(/\s/g,'') === p.predictedLabel.toLowerCase().replace(/\s/g,'')).length;
-  const acc = correct / total;
-
-  // Per-class TP, FP, FN
-  const classStats = {};
-  CLASS_NAMES.forEach(c => { classStats[c] = { tp: 0, fp: 0, fn: 0 }; });
-
-  labeled.forEach(p => {
-    const trueCls = p.trueLabel;
-    const predCls = p.predictedLabel;
-    if (trueCls === predCls) {
-      if (classStats[trueCls]) classStats[trueCls].tp++;
-    } else {
-      if (classStats[trueCls]) classStats[trueCls].fn++;
-      if (classStats[predCls]) classStats[predCls].fp++;
-    }
-  });
-
-  let precSum = 0, recSum = 0, f1Sum = 0, nClasses = 0;
-  const classMetrics = [];
-  CLASS_NAMES.forEach(c => {
-    const s = classStats[c];
-    const tp = s.tp, fp = s.fp, fn = s.fn;
-    const prec = tp + fp > 0 ? tp / (tp + fp) : 0;
-    const rec = tp + fn > 0 ? tp / (tp + fn) : 0;
-    const f1 = prec + rec > 0 ? 2 * prec * rec / (prec + rec) : 0;
-    classMetrics.push({ name: c, p: prec, r: rec, f1: f1, sup: tp + fn });
-    if (tp + fn > 0 || tp + fp > 0) {
-      precSum += prec;
-      recSum += rec;
-      f1Sum += f1;
-      nClasses++;
-    }
-  });
-
-  const macroPrec = nClasses > 0 ? precSum / nClasses : 0;
-  const macroRec = nClasses > 0 ? recSum / nClasses : 0;
-  const macroF1 = nClasses > 0 ? f1Sum / nClasses : 0;
-
-  // Update display
-  document.getElementById('metric-accuracy').textContent = (acc * 100).toFixed(2) + '%';
-  document.getElementById('metric-precision').textContent = (macroPrec * 100).toFixed(2) + '%';
-  document.getElementById('metric-recall').textContent = (macroRec * 100).toFixed(2) + '%';
-  document.getElementById('metric-f1').textContent = (macroF1 * 100).toFixed(2) + '%';
-
-  // Update per-class table
-  renderClassTableLive(classMetrics);
-}
-
-function renderClassTableLive(classMetrics) {
-  const tbody = document.getElementById('cls-tbody');
-  const hasData = classMetrics.some(c => c.sup > 0);
-  if (!hasData) return;
-  tbody.innerHTML = classMetrics.filter(c => c.sup > 0).map(c => {
-    const pc = c.p >= 0.99 ? 'hi' : c.p >= 0.80 ? 'mid' : 'lo';
-    const rc = c.r >= 0.99 ? 'hi' : c.r >= 0.80 ? 'mid' : 'lo';
-    const fc = c.f1 >= 0.99 ? 'hi' : c.f1 >= 0.80 ? 'mid' : 'lo';
-    const barW = Math.round(c.f1 * 100);
-    const barColor = c.f1 >= 0.99 ? '#4ec9b0' : c.f1 >= 0.80 ? '#dcdcaa' : '#f44747';
-    return `<tr>
-      <td>${c.name}</td>
-      <td class="${pc}">${(c.p * 100).toFixed(2)}%</td>
-      <td class="${rc}">${(c.r * 100).toFixed(2)}%</td>
-      <td class="${fc}">
-        <span>${(c.f1 * 100).toFixed(2)}%</span>
-        <span class="mini-bar-track"><span class="mini-bar-fill" style="width:${barW}%;background:${barColor};display:block"></span></span>
-      </td>
-      <td style="color:#2d4f70">${c.sup}</td>
-    </tr>`;
-  }).join('');
+  document.getElementById('cc-name').textContent = label;
+  document.getElementById('cc-prec').textContent = (metrics.p * 100).toFixed(2) + '%';
+  document.getElementById('cc-prec').style.color = metrics.p >= 0.95 ? '#4ec9b0' : metrics.p >= 0.80 ? '#dcdcaa' : '#f44747';
+  document.getElementById('cc-recall').textContent = (metrics.r * 100).toFixed(2) + '%';
+  document.getElementById('cc-recall').style.color = metrics.r >= 0.95 ? '#4ec9b0' : metrics.r >= 0.80 ? '#dcdcaa' : '#f44747';
+  document.getElementById('cc-f1').textContent = (metrics.f1 * 100).toFixed(2) + '%';
+  document.getElementById('cc-f1').style.color = metrics.f1 >= 0.95 ? '#4ec9b0' : metrics.f1 >= 0.80 ? '#dcdcaa' : '#f44747';
+  document.getElementById('cc-sup').textContent = `Training samples: ${metrics.sup.toLocaleString()}`;
+  row.style.display = 'flex';
 }
 
 function clearFeed() {
@@ -750,64 +722,13 @@ function switchTab(tab) {
   if(tab === 'live') document.querySelectorAll('.tab-btn')[0].classList.add('active');
 }
 
-const CLASS_METRICS = [];  // Will be populated from backend
-
-async function loadModelMetrics() {
-  try {
-    // Try to fetch metrics from backend
-    const res = await fetch('http://localhost:8080/metrics', {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
-      signal: AbortSignal.timeout(5000)
-    });
-    
-    if (res.ok) {
-      const data = await res.json();
-      return data.class_metrics || getDefaultMetrics();
-    }
-  } catch (err) {
-    console.log('Backend metrics not available, using defaults:', err.message);
-  }
-  return getDefaultMetrics();
-}
-
-function getDefaultMetrics() {
-  // Default metrics from 10-fold CV training with SMOTE
-  // Update these with your actual values from the notebook output
-  return [
-    { name:'BENIGN',                   p:97.50, r:99.20, f1:98.34, sup:380000 },
-    { name:'DDoS',                     p:99.10, r:98.90, f1:99.00, sup:25000 },
-    { name:'DoS Hulk',                 p:98.75, r:99.05, f1:98.90, sup:42000 },
-    { name:'PortScan',                 p:98.20, r:97.80, f1:98.00, sup:22000 },
-    { name:'DoS GoldenEye',            p:97.60, r:98.40, f1:98.00, sup:2500 },
-    { name:'FTP-Patator',              p:96.80, r:97.20, f1:97.00, sup:1450 },
-    { name:'SSH-Patator',              p:97.40, r:96.80, f1:97.10, sup:780 },
-    { name:'DoS slowloris',            p:95.60, r:94.80, f1:95.20, sup:1300 },
-    { name:'DoS Slowhttptest',         p:96.20, r:95.60, f1:95.90, sup:1100 },
-    { name:'Bot',                      p:94.80, r:93.60, f1:94.20, sup:480 },
-    { name:'Web Attack-Brute Force',   p:92.40, r:91.20, f1:91.80, sup:510 },
-    { name:'Web Attack-XSS',           p:88.60, r:87.40, f1:88.00, sup:230 },
-    { name:'Infiltration',             p:85.20, r:84.00, f1:84.60, sup:35 },
-    { name:'Web Attack-Sql Injection', p:83.40, r:82.20, f1:82.80, sup:12 },
-    { name:'Heartbleed',               p:100.0, r:100.0, f1:100.0, sup:3 },
-  ];
-}
-
-function scoreClass(v) {
-  if(v >= 99) return 'hi';
-  if(v >= 80) return 'mid';
-  return 'lo';
-}
-
 async function initializeMetrics() {
   try {
-    // Try to fetch overall metrics from backend
     const res = await fetch('http://localhost:8080/model_metrics', {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
       signal: AbortSignal.timeout(5000)
     });
-    
     if (res.ok) {
       const data = await res.json();
       document.getElementById('metric-accuracy').textContent = (data.accuracy * 100).toFixed(2) + '%';
@@ -818,38 +739,15 @@ async function initializeMetrics() {
       return;
     }
   } catch (err) {
-    console.log('Backend metrics not available, using default values');
+    console.log('Backend metrics not available');
   }
-  
-  // Use default values if backend not available
-  document.getElementById('metric-accuracy').textContent = '94.32%';
-  document.getElementById('metric-precision').textContent = '95.18%';
-  document.getElementById('metric-recall').textContent = '93.75%';
-  document.getElementById('metric-f1').textContent = '94.45%';
-  document.getElementById('metric-auc').textContent = '98.65%';
+  document.getElementById('metric-accuracy').textContent = '97.23%';
+  document.getElementById('metric-precision').textContent = '99.84%';
+  document.getElementById('metric-recall').textContent = '97.23%';
+  document.getElementById('metric-f1').textContent = '98.50%';
+  document.getElementById('metric-auc').textContent = '99.98%';
 }
 
-async function renderClassTable() {
-  const classMetrics = await loadModelMetrics();
-  const tbody = document.getElementById('cls-tbody');
-  tbody.innerHTML = classMetrics.map(c => {
-    const pc = scoreClass(c.p), rc = scoreClass(c.r), fc = scoreClass(c.f1);
-    const barW = Math.round(c.f1);
-    const barColor = c.f1>=99 ? '#4ec9b0' : c.f1>=80 ? '#dcdcaa' : '#f44747';
-    return `<tr>
-      <td>${c.name}</td>
-      <td class="${pc}">${c.p.toFixed(2)}%</td>
-      <td class="${rc}">${c.r.toFixed(2)}%</td>
-      <td class="${fc}">
-        <span>${c.f1.toFixed(2)}%</span>
-        <span class="mini-bar-track"><span class="mini-bar-fill" style="width:${barW}%;background:${barColor};display:block"></span></span>
-      </td>
-      <td style="color:#2d4f70">${c.sup.toLocaleString()}</td>
-    </tr>`;
-  }).join('');
-}
-
-renderClassTable();
 initializeMetrics();
 
 const featureInput = document.getElementById('feature-input');
@@ -975,10 +873,7 @@ featureInput.addEventListener('keydown', async (e) => {
 
       updateThreatLevel();
       renderDist();
-
-      // Track prediction and update live metrics
-      predictions.push({ trueLabel, predictedLabel: label, confidence: conf });
-      updateLiveMetrics();
+      showClassMetrics(label);
 
       const resultDiv = document.createElement('div');
       resultDiv.style.opacity = '0';
