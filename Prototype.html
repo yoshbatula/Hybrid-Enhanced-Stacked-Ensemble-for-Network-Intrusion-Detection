@@ -391,11 +391,11 @@
         <div>
           <div class="perf-section-title">OVERALL MODEL PERFORMANCE — STACKED ENSEMBLE (CICIDS 2017)</div>
           <div class="metric-grid">
-            <div class="metric-card"><span class="metric-val gold">95.87%</span><span class="metric-lbl">ACCURACY</span></div>
-            <div class="metric-card"><span class="metric-val">99.84%</span><span class="metric-lbl">PRECISION</span></div>
-            <div class="metric-card"><span class="metric-val">95.87%</span><span class="metric-lbl">RECALL</span></div>
-            <div class="metric-card"><span class="metric-val">97.78%</span><span class="metric-lbl">F1-SCORE</span></div>
-            <div class="metric-card"><span class="metric-val blue">99.98%</span><span class="metric-lbl">AUC-ROC</span></div>
+            <div class="metric-card"><span class="metric-val gold" id="metric-accuracy">0.00%</span><span class="metric-lbl">ACCURACY</span></div>
+            <div class="metric-card"><span class="metric-val" id="metric-precision">0.00%</span><span class="metric-lbl">PRECISION</span></div>
+            <div class="metric-card"><span class="metric-val" id="metric-recall">0.00%</span><span class="metric-lbl">RECALL</span></div>
+            <div class="metric-card"><span class="metric-val" id="metric-f1">0.00%</span><span class="metric-lbl">F1-SCORE</span></div>
+            <div class="metric-card"><span class="metric-val blue" id="metric-auc">98.80%</span><span class="metric-lbl">AUC-ROC (TRAINING)</span></div>
           </div>
         </div>
 
@@ -484,6 +484,13 @@ let counts = { benign:0, attack:0, warn:0, total:0 };
 let dist = {};
 let alerts = [];
 let logLines = [];
+let predictions = [];  // {trueLabel, predictedLabel, confidence}
+
+const CLASS_NAMES = [
+  'BENIGN','Bot','DDoS','DoS GoldenEye','DoS Hulk','DoS Slowhttptest',
+  'DoS slowloris','FTP-Patator','Heartbleed','Infiltration','PortScan',
+  'SSH-Patator','Web Attack-Brute Force','Web Attack-Sql Injection','Web Attack-XSS'
+];
 
 function updateClock() {
   document.getElementById('clock').textContent = new Date().toTimeString().slice(0,8);
@@ -652,6 +659,83 @@ function updateThreatLevel() {
   }
 }
 
+function updateLiveMetrics() {
+  const labeled = predictions.filter(p => p.trueLabel !== null);
+  const total = labeled.length;
+  if (total === 0) return;
+
+  const correct = labeled.filter(p => p.trueLabel.toLowerCase().replace(/\s/g,'') === p.predictedLabel.toLowerCase().replace(/\s/g,'')).length;
+  const acc = correct / total;
+
+  // Per-class TP, FP, FN
+  const classStats = {};
+  CLASS_NAMES.forEach(c => { classStats[c] = { tp: 0, fp: 0, fn: 0 }; });
+
+  labeled.forEach(p => {
+    const trueCls = p.trueLabel;
+    const predCls = p.predictedLabel;
+    if (trueCls === predCls) {
+      if (classStats[trueCls]) classStats[trueCls].tp++;
+    } else {
+      if (classStats[trueCls]) classStats[trueCls].fn++;
+      if (classStats[predCls]) classStats[predCls].fp++;
+    }
+  });
+
+  let precSum = 0, recSum = 0, f1Sum = 0, nClasses = 0;
+  const classMetrics = [];
+  CLASS_NAMES.forEach(c => {
+    const s = classStats[c];
+    const tp = s.tp, fp = s.fp, fn = s.fn;
+    const prec = tp + fp > 0 ? tp / (tp + fp) : 0;
+    const rec = tp + fn > 0 ? tp / (tp + fn) : 0;
+    const f1 = prec + rec > 0 ? 2 * prec * rec / (prec + rec) : 0;
+    classMetrics.push({ name: c, p: prec, r: rec, f1: f1, sup: tp + fn });
+    if (tp + fn > 0 || tp + fp > 0) {
+      precSum += prec;
+      recSum += rec;
+      f1Sum += f1;
+      nClasses++;
+    }
+  });
+
+  const macroPrec = nClasses > 0 ? precSum / nClasses : 0;
+  const macroRec = nClasses > 0 ? recSum / nClasses : 0;
+  const macroF1 = nClasses > 0 ? f1Sum / nClasses : 0;
+
+  // Update display
+  document.getElementById('metric-accuracy').textContent = (acc * 100).toFixed(2) + '%';
+  document.getElementById('metric-precision').textContent = (macroPrec * 100).toFixed(2) + '%';
+  document.getElementById('metric-recall').textContent = (macroRec * 100).toFixed(2) + '%';
+  document.getElementById('metric-f1').textContent = (macroF1 * 100).toFixed(2) + '%';
+
+  // Update per-class table
+  renderClassTableLive(classMetrics);
+}
+
+function renderClassTableLive(classMetrics) {
+  const tbody = document.getElementById('cls-tbody');
+  const hasData = classMetrics.some(c => c.sup > 0);
+  if (!hasData) return;
+  tbody.innerHTML = classMetrics.filter(c => c.sup > 0).map(c => {
+    const pc = c.p >= 0.99 ? 'hi' : c.p >= 0.80 ? 'mid' : 'lo';
+    const rc = c.r >= 0.99 ? 'hi' : c.r >= 0.80 ? 'mid' : 'lo';
+    const fc = c.f1 >= 0.99 ? 'hi' : c.f1 >= 0.80 ? 'mid' : 'lo';
+    const barW = Math.round(c.f1 * 100);
+    const barColor = c.f1 >= 0.99 ? '#4ec9b0' : c.f1 >= 0.80 ? '#dcdcaa' : '#f44747';
+    return `<tr>
+      <td>${c.name}</td>
+      <td class="${pc}">${(c.p * 100).toFixed(2)}%</td>
+      <td class="${rc}">${(c.r * 100).toFixed(2)}%</td>
+      <td class="${fc}">
+        <span>${(c.f1 * 100).toFixed(2)}%</span>
+        <span class="mini-bar-track"><span class="mini-bar-fill" style="width:${barW}%;background:${barColor};display:block"></span></span>
+      </td>
+      <td style="color:#2d4f70">${c.sup}</td>
+    </tr>`;
+  }).join('');
+}
+
 function clearFeed() {
   document.getElementById('feed').innerHTML = '<div class="r-sys">[SYSTEM] Log cleared.</div><div><span class="cursor"></span></div>';
 }
@@ -783,7 +867,16 @@ featureInput.addEventListener('keydown', async (e) => {
       return;
     }
 
-    const features = input.split(/[,\s]+/).map(f => parseFloat(f.trim())).filter(f => !isNaN(f));
+    // Extract true label if present (format: LABEL|78,...)
+    let trueLabel = null;
+    let featureStr = input;
+    if (input.includes('|')) {
+      const parts = input.split('|');
+      trueLabel = parts[0].trim();
+      featureStr = parts[1];
+    }
+
+    const features = featureStr.split(/[,\s]+/).map(f => parseFloat(f.trim())).filter(f => !isNaN(f));
     
     if (features.length !== 78) {
       // Show what user typed
@@ -882,6 +975,10 @@ featureInput.addEventListener('keydown', async (e) => {
 
       updateThreatLevel();
       renderDist();
+
+      // Track prediction and update live metrics
+      predictions.push({ trueLabel, predictedLabel: label, confidence: conf });
+      updateLiveMetrics();
 
       const resultDiv = document.createElement('div');
       resultDiv.style.opacity = '0';
