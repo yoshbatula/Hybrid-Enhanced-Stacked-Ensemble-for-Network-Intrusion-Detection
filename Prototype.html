@@ -460,22 +460,23 @@
 </div>
 
 <script>
+const REP = '\uFFFD';
 const ATTACKS = [
-  { label:'BENIGN',                   cls:'r-benign', sev:'low',  w:55 },
-  { label:'DDoS',                     cls:'r-attack', sev:'high', w:6  },
-  { label:'DoS Hulk',                 cls:'r-attack', sev:'high', w:5  },
-  { label:'PortScan',                 cls:'r-warn',   sev:'med',  w:5  },
-  { label:'DoS GoldenEye',            cls:'r-attack', sev:'high', w:3  },
-  { label:'FTP-Patator',              cls:'r-warn',   sev:'med',  w:3  },
-  { label:'SSH-Patator',              cls:'r-warn',   sev:'med',  w:3  },
-  { label:'DoS slowloris',            cls:'r-attack', sev:'high', w:2  },
-  { label:'DoS Slowhttptest',         cls:'r-attack', sev:'high', w:2  },
-  { label:'Bot',                      cls:'r-warn',   sev:'med',  w:2  },
-  { label:'Web Attack-Brute Force',   cls:'r-attack', sev:'high', w:2  },
-  { label:'Web Attack-XSS',           cls:'r-attack', sev:'high', w:2  },
-  { label:'Infiltration',             cls:'r-attack', sev:'high', w:1  },
-  { label:'Web Attack-Sql Injection', cls:'r-attack', sev:'high', w:1  },
-  { label:'Heartbleed',               cls:'r-attack', sev:'high', w:1  },
+  { label:'BENIGN',                              cls:'r-benign', sev:'low',  w:55 },
+  { label:'DDoS',                                cls:'r-attack', sev:'high', w:6  },
+  { label:'DoS Hulk',                            cls:'r-attack', sev:'high', w:5  },
+  { label:'PortScan',                            cls:'r-warn',   sev:'med',  w:5  },
+  { label:'DoS GoldenEye',                       cls:'r-attack', sev:'high', w:3  },
+  { label:'FTP-Patator',                         cls:'r-warn',   sev:'med',  w:3  },
+  { label:'SSH-Patator',                         cls:'r-warn',   sev:'med',  w:3  },
+  { label:'DoS slowloris',                       cls:'r-attack', sev:'high', w:2  },
+  { label:'DoS Slowhttptest',                    cls:'r-attack', sev:'high', w:2  },
+  { label:'Bot',                                 cls:'r-warn',   sev:'med',  w:2  },
+  { label:'Web Attack ' + REP + ' Brute Force',  cls:'r-attack', sev:'high', w:2  },
+  { label:'Web Attack ' + REP + ' XSS',          cls:'r-attack', sev:'high', w:2  },
+  { label:'Infiltration',                        cls:'r-attack', sev:'high', w:1  },
+  { label:'Web Attack ' + REP + ' Sql Injection',cls:'r-attack', sev:'high', w:1  },
+  { label:'Heartbleed',                          cls:'r-attack', sev:'high', w:1  },
 ];
 
 const pool = [];
@@ -505,21 +506,21 @@ const CLASS_NAMES = [
 
 // Training metrics from v4 notebook (10-fold CV test set)
 const CLASS_TRAINING_METRICS = {
-  'BENIGN':                   { p:1.0000, r:0.9678, f1:0.9836, sup:628518 },
-  'Bot':                      { p:0.4755, r:0.9983, f1:0.6442, sup:584 },
-  'DDoS':                     { p:0.9988, r:0.9999, f1:0.9993, sup:38404 },
-  'DoS GoldenEye':            { p:0.9737, r:0.9961, f1:0.9848, sup:3086 },
-  'DoS Hulk':                 { p:0.9984, r:0.9915, f1:0.9949, sup:51854 },
-  'DoS Slowhttptest':         { p:0.9150, r:0.9955, f1:0.9536, sup:1568 },
-  'DoS slowloris':            { p:0.9840, r:0.9920, f1:0.9880, sup:1616 },
-  'FTP-Patator':              { p:0.9961, r:0.9994, f1:0.9978, sup:1779 },
-  'Heartbleed':               { p:0.6000, r:1.0000, f1:0.7500, sup:3 },
-  'Infiltration':             { p:0.0006, r:1.0000, f1:0.0012, sup:11 },
-  'PortScan':                 { p:0.9893, r:0.9994, f1:0.9943, sup:27208 },
-  'SSH-Patator':              { p:0.9887, r:1.0000, f1:0.9943, sup:966 },
-  'Web Attack-Brute Force':   { p:0.8110, r:0.5351, f1:0.6448, sup:441 },
-  'Web Attack-Sql Injection': { p:0.0106, r:1.0000, f1:0.0209, sup:6 },
-  'Web Attack-XSS':           { p:0.3268, r:0.7602, f1:0.4571, sup:196 },
+  'BENIGN':                              { p:1.0000, r:0.9678, f1:0.9836, sup:628518 },
+  'Bot':                                 { p:0.4755, r:0.9983, f1:0.6442, sup:584 },
+  'DDoS':                                { p:0.9988, r:0.9999, f1:0.9993, sup:38404 },
+  'DoS GoldenEye':                       { p:0.9737, r:0.9961, f1:0.9848, sup:3086 },
+  'DoS Hulk':                            { p:0.9984, r:0.9915, f1:0.9949, sup:51854 },
+  'DoS Slowhttptest':                    { p:0.9150, r:0.9955, f1:0.9536, sup:1568 },
+  'DoS slowloris':                       { p:0.9840, r:0.9920, f1:0.9880, sup:1616 },
+  'FTP-Patator':                         { p:0.9961, r:0.9994, f1:0.9978, sup:1779 },
+  'Heartbleed':                          { p:0.6000, r:1.0000, f1:0.7500, sup:3 },
+  'Infiltration':                        { p:0.0006, r:1.0000, f1:0.0012, sup:11 },
+  'PortScan':                            { p:0.9893, r:0.9994, f1:0.9943, sup:27208 },
+  'SSH-Patator':                         { p:0.9887, r:1.0000, f1:0.9943, sup:966 },
+  ['Web Attack ' + REP + ' Brute Force']:  { p:0.8110, r:0.5351, f1:0.6448, sup:441 },
+  ['Web Attack ' + REP + ' Sql Injection']:{ p:0.0106, r:1.0000, f1:0.0209, sup:6 },
+  ['Web Attack ' + REP + ' XSS']:          { p:0.3268, r:0.7602, f1:0.4571, sup:196 },
 };
 
 function updateClock() {
@@ -689,12 +690,19 @@ function updateThreatLevel() {
   }
 }
 
+function displayName(label) {
+  return label
+    .replace('Web Attack \uFFFD Brute Force', 'Web Attack - Brute Force')
+    .replace('Web Attack \uFFFD Sql Injection', 'Web Attack - Sql Injection')
+    .replace('Web Attack \uFFFD XSS', 'Web Attack - XSS');
+}
+
 function showClassMetrics(label) {
   const row = document.getElementById('current-class-row');
   const metrics = CLASS_TRAINING_METRICS[label];
   if (!metrics) { row.style.display = 'none'; return; }
 
-  document.getElementById('cc-name').textContent = label;
+  document.getElementById('cc-name').textContent = displayName(label);
   document.getElementById('cc-prec').textContent = (metrics.p * 100).toFixed(2) + '%';
   document.getElementById('cc-prec').style.color = metrics.p >= 0.95 ? '#4ec9b0' : metrics.p >= 0.80 ? '#dcdcaa' : '#f44747';
   document.getElementById('cc-recall').textContent = (metrics.r * 100).toFixed(2) + '%';
@@ -875,15 +883,16 @@ featureInput.addEventListener('keydown', async (e) => {
       const resultDiv = document.createElement('div');
       resultDiv.style.opacity = '0';
       
+      const cleanLabel = displayName(label);
       if (label === 'BENIGN') {
         resultDiv.className = 'r-benign';
-        resultDiv.innerHTML = `[RESULT] <span class="hl">${label}</span> confidence=${conf}`;
+        resultDiv.innerHTML = `[RESULT] <span class="hl">${cleanLabel}</span> confidence=${conf}`;
       } else if (atkMeta.sev === 'med') {
         resultDiv.className = 'r-warn';
-        resultDiv.innerHTML = `[RESULT] [! WARN !] <span class="hl">${label}</span> confidence=${conf}`;
+        resultDiv.innerHTML = `[RESULT] [! WARN !] <span class="hl">${cleanLabel}</span> confidence=${conf}`;
       } else {
         resultDiv.className = 'r-attack';
-        resultDiv.innerHTML = `[RESULT] <span style="color:#f44747">[!! THREAT !!]</span> <span class="hl">${label}</span> confidence=${conf}`;
+        resultDiv.innerHTML = `[RESULT] <span style="color:#f44747">[!! THREAT !!]</span> <span class="hl">${cleanLabel}</span> confidence=${conf}`;
       }
       
       feed.insertBefore(resultDiv, inputLine);
