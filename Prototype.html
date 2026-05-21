@@ -423,7 +423,21 @@
       </div>
     </div>
 
+    <div class="sb-block">
+      <div class="sb-title">THREAT LEVEL</div>
+      <div id="threat-level" style="font-size:22px;color:#569cd6">CLEAR</div>
+      <div id="threat-sub" style="font-size:10px;color:#4a6d9c;margin-top:2px">No active threats detected</div>
+    </div>
 
+    <div class="sb-block" style="flex:1">
+      <div class="sb-title">ALERTS</div>
+      <div id="alert-list"><div class="r-sys" style="font-size:10px">No alerts yet.</div></div>
+    </div>
+
+    <div class="sb-block">
+      <div class="sb-title">ATTACK DISTRIBUTION</div>
+      <div id="dist-bars"><div class="r-sys" style="font-size:10px">No attacks detected yet.</div></div>
+    </div>
   </div>
 </div>
 
@@ -838,7 +852,37 @@ featureInput.addEventListener('keydown', async (e) => {
       const conf = parseFloat(data.confidence);
       const label = data.label;
       const atkMeta = ATTACKS.find(a => a.label === label) || { cls:'r-warn', sev:'med' };
-      
+
+      // Initialize uptime on first manual test
+      if (!startTime) {
+        startTime = Date.now();
+        if (!uptimeTimer) uptimeTimer = setInterval(updateUptime, 1000);
+      }
+
+      // Update counters
+      counts.total++;
+      if (label === 'BENIGN') counts.benign++;
+      else if (atkMeta.sev === 'med') counts.warn++;
+      else counts.attack++;
+      dist[label] = (dist[label]||0)+1;
+
+      document.getElementById('h-pkts').textContent = counts.total;
+      document.getElementById('h-warn').textContent = counts.warn;
+      document.getElementById('h-threats').textContent = counts.attack;
+      document.getElementById('c-benign').textContent = counts.benign;
+      document.getElementById('c-attack').textContent = counts.attack;
+      document.getElementById('c-warn').textContent = counts.warn;
+      document.getElementById('c-total').textContent = counts.total;
+
+      if (label !== 'BENIGN') {
+        alerts.unshift({ label, sev: atkMeta.sev, src: 'manual', time: ts() });
+        if (alerts.length > 8) alerts.pop();
+        renderAlerts();
+      }
+
+      updateThreatLevel();
+      renderDist();
+
       const resultDiv = document.createElement('div');
       resultDiv.style.opacity = '0';
       
