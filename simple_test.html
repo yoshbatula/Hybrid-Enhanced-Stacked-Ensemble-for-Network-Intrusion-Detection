@@ -6,16 +6,21 @@
 <p>Enter 78 numbers (comma or space separated):</p>
 <textarea id="input" rows="4" cols="80" style="background:#222;color:#0f0;border:1px solid #0f0;padding:8px"></textarea><br><br>
 <button onclick="predict()" style="background:#0f0;color:#000;padding:8px 20px;border:none;cursor:pointer">PREDICT</button>
-<pre id="result" style="margin-top:20px"></pre>
+<pre id="result" style="margin-top:20px;color:#0f0"></pre>
 
 <script>
 async function predict() {
   const val = document.getElementById('input').value.trim();
+  if (!val) { document.getElementById('result').textContent = 'ERROR: No input'; return; }
+  
   const feats = val.split(/[,\s]+/).map(Number).filter(v => !isNaN(v));
   if (feats.length !== 78) {
     document.getElementById('result').textContent = 'ERROR: Need exactly 78 numbers, got ' + feats.length;
     return;
   }
+  
+  document.getElementById('result').textContent = 'Loading...';
+  
   try {
     const res = await fetch('http://127.0.0.1:8080/predict', {
       method: 'POST',
@@ -23,8 +28,15 @@ async function predict() {
       body: JSON.stringify({features: feats})
     });
     const data = await res.json();
-    document.getElementById('result').textContent = 
-      'Prediction: ' + data.label + '\nConfidence: ' + data.confidence;
+    
+    if (data.error) {
+      document.getElementById('result').textContent = 'ERROR: ' + data.error;
+    } else {
+      document.getElementById('result').innerHTML = 
+        'Prediction: <b>' + data.label + '</b>\n' +
+        'Confidence: ' + data.confidence + '\n' +
+        'Model: ' + data.model_used;
+    }
   } catch(e) {
     document.getElementById('result').textContent = 'Connection error: ' + e.message;
   }
