@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head><title>NIDS Test</title></head>
+<body style="font-family:monospace; background:#111; color:#0f0; padding:20px">
+<h2>NIDS Predictor</h2>
+<p>Enter 78 numbers (comma or space separated):</p>
+<textarea id="input" rows="4" cols="80" style="background:#222;color:#0f0;border:1px solid #0f0;padding:8px"></textarea><br><br>
+<button onclick="predict()" style="background:#0f0;color:#000;padding:8px 20px;border:none;cursor:pointer">PREDICT</button>
+<pre id="result" style="margin-top:20px"></pre>
+
+<script>
+async function predict() {
+  const val = document.getElementById('input').value.trim();
+  const feats = val.split(/[,\s]+/).map(Number).filter(v => !isNaN(v));
+  if (feats.length !== 78) {
+    document.getElementById('result').textContent = 'ERROR: Need exactly 78 numbers, got ' + feats.length;
+    return;
+  }
+  try {
+    const res = await fetch('http://127.0.0.1:8080/predict', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({features: feats})
+    });
+    const data = await res.json();
+    document.getElementById('result').textContent = 
+      'Prediction: ' + data.label + '\nConfidence: ' + data.confidence;
+  } catch(e) {
+    document.getElementById('result').textContent = 'Connection error: ' + e.message;
+  }
+}
+</script>
+</body>
+</html>
