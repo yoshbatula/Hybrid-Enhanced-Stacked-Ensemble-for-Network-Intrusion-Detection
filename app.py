@@ -24,12 +24,17 @@ SAVE_DIR = './saved_model'
 
 print('[NIDS] Loading model components...')
 try:
-    import joblib
+    import joblib, json
     lgbm_model    = joblib.load(os.path.join(SAVE_DIR, 'lgbm_model.pkl'))
     bagging_model = joblib.load(os.path.join(SAVE_DIR, 'bagging_model.pkl'))
     meta          = joblib.load(os.path.join(SAVE_DIR, 'meta_learner.pkl'))
     scaler        = joblib.load(os.path.join(SAVE_DIR, 'scaler.pkl'))
     le            = joblib.load(os.path.join(SAVE_DIR, 'label_encoder.pkl'))
+    with open(os.path.join(SAVE_DIR, 'feature_profiles.json')) as f:
+        profiles_data = json.load(f)
+    FEATURE_NAMES = profiles_data['feature_names']
+    PROFILES = profiles_data['profiles']
+    TOP_FEAT_IDX = profiles_data['top_features_indices']
     print('[NIDS] All models loaded successfully!')
     MODEL_LOADED = True
 except Exception as e:
@@ -86,6 +91,67 @@ def predict():
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/explain', methods=['POST'])
+def explain():
+    try:
+        data = request.json
+        if not data or 'features' not in data:
+            return jsonify({'error': 'Missing features'}), 400
+        features = np.array(data['features'], dtype=float).reshape(1, -1)
+
+        if not MODEL_LOADED:
+            return jsonify({'explanation': [], 'confidence': 0.0, 'label': 'unknown', 'reason': 'no_model'})
+
+        scaled = scaler.transform(features)
+        p1 = lgbm_model.predict_proba(scaled)
+        p2 = bagging_model.predict_proba(scaled)
+        meta_input = np.hstack([p1, p2])
+        pred_label = le.inverse_transform(meta.predict(meta_input))[0]
+        confidence = float(meta.predict_proba(meta_input).max())
+
+        fvec = scaled[0]
+        benign_stats = PROFILES.get('BENIGN', PROFILES.get('__global__', {}))
+        class_stats = PROFILES.get(pred_label, {})
+
+        explanations = []
+        for idx in TOP_FEAT_IDX:
+            fname = FEATURE_NAMES[idx]
+            inp_val = fvec[idx]
+            benign_mean = benign_stats['mean'][idx]
+            benign_std = benign_stats['std'][idx]
+            cls_mean = class_stats.get('mean', benign_stats['mean'])[idx] if class_stats else benign_mean
+
+            diff_from_benign = inp_val - benign_mean
+            direction = 'higher' if diff_from_benign > 0.05 else ('lower' if diff_from_benign < -0.05 else 'typical')
+            distance = abs(diff_from_benign) / (benign_std + 1e-8)
+
+            if distance > 0.15:
+                explanations.append({
+                    'feature': fname,
+                    'value': round(float(inp_val), 4),
+                    'benign_avg': round(float(benign_mean), 4),
+                    'class_avg': round(float(cls_mean), 4),
+                    'direction': direction,
+                    'distance': round(float(distance), 2)
+                })
+
+        explanations.sort(key=lambda x: x['distance'], reverse=True)
+        top = explanations[:6]
+
+        reason = 'benign' if pred_label == 'BENIGN' else 'anomaly'
+        if pred_label == 'BENIGN' and len(top) == 0:
+            reason = 'benign_typical'
+
+        return jsonify({
+            'label': pred_label,
+            'confidence': round(confidence, 4),
+            'explanation': top,
+            'reason': reason
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e), 'explanation': []}), 500
 
 @app.route('/predict_csv', methods=['POST'])
 def predict_csv():

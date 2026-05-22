@@ -419,6 +419,7 @@
                 </div>
               </div>
               <div style="margin-top:8px;font-size:10px;color:#4a6d9c" id="cc-sup"></div>
+              <div style="margin-top:10px;padding:10px;background:#00122e;border-left:3px solid #1b4f8a;border-radius:2px;font-size:11px;color:#a8c9e0;line-height:1.5" id="cc-explain"></div>
             </div>
           </div>
         </div>
@@ -690,6 +691,27 @@ function updateThreatLevel() {
   }
 }
 
+const TOP_FEATURES = [
+  'Flow IAT Min', 'Init_Win_bytes_forward', 'Fwd IAT Min',
+  'Init_Win_bytes_backward', 'Destination Port', 'Flow Duration',
+  'Bwd Packets/s', 'Fwd IAT Total'
+];
+
+const CLASS_EXPLANATIONS = {
+  'BENIGN': 'Normal traffic patterns: typical port usage, balanced packet sizes, standard flow durations. No anomalous flags or unusual IAT patterns detected.',
+  'Bot': 'Detected anomalous periodic beaconing activity. Unusual ratio of small packets with regular IAT intervals, consistent with C&C communication patterns.',
+  'DDoS': 'High-volume flood detected: massive packet count, elevated Flow Bytes/s and Flow Packets/s. Multiple connections from distributed sources targeting a single endpoint.',
+  'DoS GoldenEye': 'Slow-rate HTTP application-layer DoS detected: partial HTTP requests with long intervals, low but sustained bandwidth consumption targeting port 80.',
+  'DoS Hulk': 'High-rate HTTP flood: very high packet count with large Fwd Packet Length, many SYN flags, targeting port 80 with randomized request patterns.',
+  'DoS Slowhttptest': 'Slow-body DoS attack: HTTP POST with extremely slow body transmission, abnormally long Flow IAT and Bwd IAT intervals.',
+  'DoS slowloris': 'Slow-headers DoS: many partial HTTP requests held open, very high Flow IAT Max, low bytes per packet, keeping server connections occupied.',
+  'FTP-Patator': 'Brute-force FTP detected: repeated connections to port 21 with short duration, high packet count for auth attempts, alternating ACK/PSH flags.',
+  'PortScan': 'Port scanning activity: multiple connections to different ports with minimal data exchange, very short flow durations, characteristic SYN-only flag pattern.',
+  'Web Attack - XSS': 'Cross-site scripting attempt on port 80/443: HTTP request with anomalous packet payload patterns, unusual Fwd Header Length indicating injected script.',
+  'Web Attack - Brute Force': 'Web application brute-force: repeated HTTP requests to port 80/443 with varying credentials, identifiable by request rate and packet size patterns.',
+  'Web Attack - Sql Injection': 'SQL injection attempt: HTTP requests with anomalous query strings, detectable through unusual packet length distribution and flag patterns.',
+};
+
 function displayName(label) {
   return label
     .replace('Web Attack \uFFFD Brute Force', 'Web Attack - Brute Force')
@@ -697,7 +719,7 @@ function displayName(label) {
     .replace('Web Attack \uFFFD XSS', 'Web Attack - XSS');
 }
 
-function showClassMetrics(label) {
+function showClassMetrics(label, explanation) {
   const row = document.getElementById('current-class-row');
   const metrics = CLASS_TRAINING_METRICS[label];
   if (!metrics) { row.style.display = 'none'; return; }
@@ -710,6 +732,25 @@ function showClassMetrics(label) {
   document.getElementById('cc-f1').textContent = (metrics.f1 * 100).toFixed(2) + '%';
   document.getElementById('cc-f1').style.color = metrics.f1 >= 0.95 ? '#4ec9b0' : metrics.f1 >= 0.80 ? '#dcdcaa' : '#f44747';
   document.getElementById('cc-sup').textContent = `Training samples: ${metrics.sup.toLocaleString()}`;
+  const cleaned = displayName(label);
+  document.getElementById('cc-explain').innerHTML = '<strong style="color:#9cdcfe">Description:</strong> ' + (CLASS_EXPLANATIONS[cleaned] || 'No description available for this class.');
+  if (explanation && explanation.length > 0) {
+    let html = '<div style="margin-top:8px;padding-top:8px;border-top:1px solid #1b4f8a"><strong style="color:#9cdcfe">Why flagged as ' + cleaned + ':</strong></div>';
+    html += '<div style="margin-top:6px;font-size:10px;color:#a8c9e0">';
+    html += '<div style="display:grid;grid-template-columns:auto 1fr auto;gap:4px 8px;align-items:center">';
+    html += '<div style="color:#4a6d9c;font-size:9px">FEATURE</div><div style="color:#4a6d9c;font-size:9px">VALUE vs BENIGN AVG</div><div style="color:#4a6d9c;font-size:9px">DEV</div>';
+    for (const f of explanation) {
+      const arrow = f.direction === 'higher' ? '&#9650;' : f.direction === 'lower' ? '&#9660;' : '&#9654;';
+      const color = f.direction === 'higher' ? '#f44747' : f.direction === 'lower' ? '#dcdcaa' : '#4a6d9c';
+      html += '<div style="color:#9cdcfe">' + f.feature + '</div>';
+      html += '<div>' + f.value + ' <span style="color:#4a6d9c">vs</span> ' + f.benign_avg + '</div>';
+      html += '<div style="color:' + color + '">' + arrow + ' ' + f.distance.toFixed(1) + '</div>';
+    }
+    html += '</div></div>';
+    document.getElementById('cc-explain').insertAdjacentHTML('beforeend', html);
+  } else if (cleaned === 'BENIGN') {
+    document.getElementById('cc-explain').insertAdjacentHTML('beforeend', '<div style="margin-top:6px;padding-top:6px;font-size:10px;color:#4ec9b0">All features within typical BENIGN range — no anomalous patterns detected.</div>');
+  }
   row.style.display = 'flex';
 }
 
@@ -849,6 +890,21 @@ featureInput.addEventListener('keydown', async (e) => {
       const label = data.label;
       const atkMeta = ATTACKS.find(a => a.label === label) || { cls:'r-warn', sev:'med' };
 
+      // Fetch explanation
+      let explanation = [];
+      try {
+        const expRes = await fetch('http://localhost:8080/explain', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ features }),
+          signal: AbortSignal.timeout(5000)
+        });
+        if (expRes.ok) {
+          const expData = await expRes.json();
+          explanation = expData.explanation || [];
+        }
+      } catch (e) { /* explanation is optional */ }
+
       // Initialize uptime on first manual test
       if (!startTime) {
         startTime = Date.now();
@@ -878,7 +934,7 @@ featureInput.addEventListener('keydown', async (e) => {
 
       updateThreatLevel();
       renderDist();
-      showClassMetrics(label);
+      showClassMetrics(label, explanation);
 
       const resultDiv = document.createElement('div');
       resultDiv.style.opacity = '0';
