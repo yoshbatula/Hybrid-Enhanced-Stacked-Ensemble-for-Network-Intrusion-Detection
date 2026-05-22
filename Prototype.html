@@ -891,7 +891,7 @@ featureInput.addEventListener('keydown', async (e) => {
       const atkMeta = ATTACKS.find(a => a.label === label) || { cls:'r-warn', sev:'med' };
 
       // Fetch explanation
-      let explanation = [];
+      let explanation = [], summary = '';
       try {
         const expRes = await fetch('http://localhost:8080/explain', {
           method: 'POST',
@@ -902,6 +902,7 @@ featureInput.addEventListener('keydown', async (e) => {
         if (expRes.ok) {
           const expData = await expRes.json();
           explanation = expData.explanation || [];
+          summary = expData.summary || '';
         }
       } catch (e) { /* explanation is optional */ }
 

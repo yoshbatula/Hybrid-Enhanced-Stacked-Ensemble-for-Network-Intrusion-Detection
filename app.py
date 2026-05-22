@@ -92,6 +92,62 @@ def predict():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+FEATURE_GROUPS = {
+    'timing': ['IAT', 'Flow Duration', 'Active', 'Idle'],
+    'volume': ['Total Length', 'Packet Length', 'Flow Bytes', 'Flow Packets',
+               'Bulk', 'Packet', 'Bytes', 'Packets/s'],
+    'flags': ['SYN', 'ACK', 'PSH', 'RST', 'URG', 'CWE', 'ECE', 'FIN',
+              'PSH Flags', 'CWR Flags', 'ECE Flags', 'URG Flags', 'ACK Flags',
+              'SYN Flags', 'FIN Flags', 'RST Flags'],
+    'window': ['Init_Win_bytes', 'Window'],
+    'counters': ['Subflow', 'Avg Packet', 'Avg Bwd'],
+    'port': ['Destination Port']
+}
+
+def _categorize_feature(fname):
+    for cat, keywords in FEATURE_GROUPS.items():
+        for kw in keywords:
+            if kw.lower() in fname.lower():
+                return cat
+    return 'other'
+
+def _generate_summary(pred_label, features_by_cat):
+    if pred_label == 'BENIGN' or not features_by_cat:
+        return None
+    parts = []
+    for cat in ['timing', 'volume', 'flags', 'window', 'counters', 'port', 'other']:
+        items = features_by_cat.get(cat, [])
+        if not items:
+            continue
+        count = len(items)
+        dirs = set(i['direction'] for i in items)
+        if cat == 'timing' and 'lower' in dirs:
+            parts.append(f'abnormally fast/low timing metrics ({count} features)')
+        elif cat == 'timing' and 'higher' in dirs:
+            parts.append(f'abnormally slow/high timing metrics ({count} features)')
+        elif cat == 'volume' and 'higher' in dirs:
+            parts.append(f'elevated traffic volume ({count} features)')
+        elif cat == 'volume' and 'lower' in dirs:
+            parts.append(f'reduced traffic volume ({count} features)')
+        elif cat == 'flags' and 'higher' in dirs:
+            parts.append(f'unusual flag patterns ({count} features)')
+        elif cat == 'port':
+            parts.append(f'unusual destination port')
+        elif cat == 'window':
+            parts.append(f'abnormal TCP window sizes')
+        else:
+            parts.append(f'anomalous {cat} characteristics ({count} features)')
+    if not parts:
+        return None
+    summary = 'Traffic flagged as ' + pred_label + ': '
+    if len(parts) == 1:
+        summary += parts[0] + '.'
+    elif len(parts) == 2:
+        summary += parts[0] + ' and ' + parts[1] + '.'
+    else:
+        summary += ', '.join(parts[:-1]) + ', and ' + parts[-1] + '.'
+    return summary
+
 @app.route('/explain', methods=['POST'])
 def explain():
     try:
@@ -101,7 +157,7 @@ def explain():
         features = np.array(data['features'], dtype=float).reshape(1, -1)
 
         if not MODEL_LOADED:
-            return jsonify({'explanation': [], 'confidence': 0.0, 'label': 'unknown', 'reason': 'no_model'})
+            return jsonify({'explanation': [], 'confidence': 0.0, 'label': 'unknown', 'reason': 'no_model', 'summary': None})
 
         scaled = scaler.transform(features)
         p1 = lgbm_model.predict_proba(scaled)
@@ -112,32 +168,40 @@ def explain():
 
         fvec = scaled[0]
         benign_stats = PROFILES.get('BENIGN', PROFILES.get('__global__', {}))
-        class_stats = PROFILES.get(pred_label, {})
 
-        explanations = []
-        for idx in TOP_FEAT_IDX:
+        all_explanations = []
+        for idx in range(len(FEATURE_NAMES)):
             fname = FEATURE_NAMES[idx]
             inp_val = fvec[idx]
             benign_mean = benign_stats['mean'][idx]
             benign_std = benign_stats['std'][idx]
-            cls_mean = class_stats.get('mean', benign_stats['mean'])[idx] if class_stats else benign_mean
 
             diff_from_benign = inp_val - benign_mean
-            direction = 'higher' if diff_from_benign > 0.05 else ('lower' if diff_from_benign < -0.05 else 'typical')
+            direction = 'higher' if diff_from_benign > 0.04 else ('lower' if diff_from_benign < -0.04 else 'typical')
             distance = abs(diff_from_benign) / (benign_std + 1e-8)
 
             if distance > 0.15:
-                explanations.append({
+                all_explanations.append({
                     'feature': fname,
                     'value': round(float(inp_val), 4),
                     'benign_avg': round(float(benign_mean), 4),
-                    'class_avg': round(float(cls_mean), 4),
                     'direction': direction,
-                    'distance': round(float(distance), 2)
+                    'distance': round(float(distance), 2),
+                    'category': _categorize_feature(fname)
                 })
 
-        explanations.sort(key=lambda x: x['distance'], reverse=True)
-        top = explanations[:6]
+        all_explanations.sort(key=lambda x: x['distance'], reverse=True)
+        top = all_explanations[:12]
+
+        # Group by category for summary
+        features_by_cat = {}
+        for e in all_explanations[:20]:
+            cat = e['category']
+            if cat not in features_by_cat:
+                features_by_cat[cat] = []
+            features_by_cat[cat].append(e)
+
+        summary = _generate_summary(pred_label, features_by_cat)
 
         reason = 'benign' if pred_label == 'BENIGN' else 'anomaly'
         if pred_label == 'BENIGN' and len(top) == 0:
@@ -147,11 +211,12 @@ def explain():
             'label': pred_label,
             'confidence': round(confidence, 4),
             'explanation': top,
+            'summary': summary,
             'reason': reason
         })
 
     except Exception as e:
-        return jsonify({'error': str(e), 'explanation': []}), 500
+        return jsonify({'error': str(e), 'explanation': [], 'summary': None}), 500
 
 @app.route('/predict_csv', methods=['POST'])
 def predict_csv():
