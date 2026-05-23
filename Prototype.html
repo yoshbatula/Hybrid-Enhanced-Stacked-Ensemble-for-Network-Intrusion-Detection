@@ -455,9 +455,7 @@
                 </div>
               </div>
               <div style="margin-top:8px;font-size:10px;color:#4a6d9c" id="sim-cc-sup"></div>
-              <div style="margin-top:10px;padding:10px;background:#00122e;border-left:3px solid #1b4f8a;border-radius:2px;font-size:11px;color:#a8c9e0;line-height:1.5" id="sim-cc-explain">
-                <strong style="color:#9cdcfe">Description:</strong> <span id="sim-cc-desc"></span>
-              </div>
+              <div style="margin-top:10px;padding:10px;background:#00122e;border-left:3px solid #1b4f8a;border-radius:2px;font-size:11px;color:#a8c9e0;line-height:1.5" id="sim-cc-explain"></div>
               <div style="margin-top:8px;font-size:10px;color:#4a6d9c" id="sim-cc-vector"></div>
             </div>
           </div>
@@ -1093,7 +1091,7 @@ async function runSimulation(className) {
   document.getElementById('sim-status').textContent = 'Testing ' + className + '...';
 
   document.getElementById('sim-cc-name').textContent = className;
-  document.getElementById('sim-cc-desc').textContent = 'Running prediction...';
+  document.getElementById('sim-cc-explain').innerHTML = '<strong style="color:#9cdcfe">Description:</strong> Running prediction...';
   document.getElementById('sim-cc-prec').textContent = '--';
   document.getElementById('sim-cc-recall').textContent = '--';
   document.getElementById('sim-cc-f1').textContent = '--';
@@ -1101,6 +1099,7 @@ async function runSimulation(className) {
   document.getElementById('sim-cc-vector').textContent = 'Vector: ' + vecStr.substring(0, 80) + '...';
   document.getElementById('sim-current-class-row').style.display = 'flex';
 
+  document.getElementById('sim-status').textContent = 'Testing ' + className + ' (sending request)...';
   try {
     const res = await fetch('http://localhost:8080/predict', {
       method: 'POST',
@@ -1108,6 +1107,7 @@ async function runSimulation(className) {
       body: JSON.stringify({ features: vec }),
       signal: AbortSignal.timeout(10000)
     });
+    document.getElementById('sim-status').textContent = 'Testing ' + className + ' (got response)...';
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     const label = data.label;
@@ -1194,7 +1194,7 @@ async function runSimulation(className) {
     document.getElementById('sim-cc-explain').innerHTML = explainHtml;
     document.getElementById('sim-status').textContent = 'Tested ' + className + ' → predicted ' + cleaned + ' (conf=' + (conf*100).toFixed(2) + '%)';
   } catch (e) {
-    document.getElementById('sim-status').textContent = 'Error: ' + e.message;
+    document.getElementById('sim-status').textContent = 'Error at step: ' + e.message;
   }
 }
 </script>
