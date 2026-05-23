@@ -455,8 +455,8 @@
                 </div>
               </div>
               <div style="margin-top:8px;font-size:10px;color:#4a6d9c" id="sim-cc-sup"></div>
+              <div style="margin-top:10px;padding:8px;background:#00122e;border:1px solid #0e3460;border-radius:3px;font-size:10px;color:#a8c9e0;word-break:break-all;font-family:monospace;max-height:200px;overflow-y:auto" id="sim-cc-vector"></div>
               <div style="margin-top:10px;padding:10px;background:#00122e;border-left:3px solid #1b4f8a;border-radius:2px;font-size:11px;color:#a8c9e0;line-height:1.5" id="sim-cc-explain"></div>
-              <div style="margin-top:8px;font-size:10px;color:#4a6d9c" id="sim-cc-vector"></div>
             </div>
           </div>
         </div>
@@ -1096,7 +1096,7 @@ async function runSimulation(className) {
   document.getElementById('sim-cc-recall').textContent = '--';
   document.getElementById('sim-cc-f1').textContent = '--';
   document.getElementById('sim-cc-sup').textContent = '';
-  document.getElementById('sim-cc-vector').textContent = 'Vector: ' + vecStr.substring(0, 80) + '...';
+  document.getElementById('sim-cc-vector').innerHTML = '<strong style="color:#9cdcfe;font-size:11px">FULL 78-FEATURE VECTOR (scaled 0-1)</strong><br><span style="color:#a8c9e0;font-size:10px">' + vecStr + '</span>';
   document.getElementById('sim-current-class-row').style.display = 'flex';
 
   document.getElementById('sim-status').textContent = 'Testing ' + className + ' (sending request)...';
@@ -1198,9 +1198,8 @@ async function runSimulation(className) {
       explainHtml += '<div style="margin-top:10px;padding-top:8px;border-top:1px solid #1b4f8a"><strong style="color:#9cdcfe;font-size:11px">FEATURE COMPARISON: Input vs Benign Average</strong></div>';
       explainHtml += '<div style="margin-top:6px">';
       for (const f of topFeats) {
-        const maxW = Math.max(f.value, f.benign_avg, 0.001);
-        const inpPct = (f.value / maxW) * 100;
-        const benPct = (f.benign_avg / maxW) * 100;
+        const inpPct = f.value * 100;
+        const benPct = f.benign_avg * 100;
         const isHigh = f.direction === 'higher';
         explainHtml += '<div style="margin-bottom:8px;font-size:9px">';
         explainHtml += '<div style="color:#9cdcfe;margin-bottom:1px;font-size:9px">' + f.feature + '</div>';
@@ -1220,12 +1219,6 @@ async function runSimulation(className) {
       }
       explainHtml += '</div>';
     }
-
-    // Show full vector
-    explainHtml += '<div style="margin-top:8px;padding-top:6px;border-top:1px solid #0e3460">';
-    explainHtml += '<div style="font-size:9px;color:#4a6d9c;cursor:pointer" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display===\'none\'?\'block\':\'none\'">&#9654; Click to show/hide full 78-feature vector</div>';
-    explainHtml += '<div style="display:none;margin-top:4px;padding:6px;background:#00122e;border-radius:2px;font-size:8px;color:#6a8dad;word-break:break-all;max-height:120px;overflow-y:auto">' + vecStr + '</div>';
-    explainHtml += '</div>';
 
     document.getElementById('sim-cc-explain').innerHTML = explainHtml;
     document.getElementById('sim-status').textContent = 'Tested ' + className + ' → predicted ' + cleaned + ' (conf=' + (conf*100).toFixed(2) + '%)';

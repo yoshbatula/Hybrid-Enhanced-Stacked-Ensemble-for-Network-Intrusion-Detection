@@ -257,15 +257,21 @@ DEFAULT_INSIGHT = {
     'indicator': 'Multiple feature deviations from BENIGN baseline across timing, volume, and protocol characteristics.'
 }
 
-def _generate_critical_insight(pred_label):
+def _generate_critical_insight(pred_label, top_explanation=None):
     if pred_label == 'BENIGN':
         return None
     display = pred_label.replace('\xef\xbf\xbd', '-')
     info = ATTACK_INSIGHTS.get(display, ATTACK_INSIGHTS.get(pred_label, DEFAULT_INSIGHT))
+    indicator = info['indicator']
+    if top_explanation:
+        feat_strs = []
+        for e in top_explanation[:3]:
+            feat_strs.append(f"{e['feature']}={e['value']} ({e['direction']}, dev={e['distance']})")
+        indicator = f"Top deviations: {'; '.join(feat_strs)}. " + info['indicator']
     return {
         'pattern': info['pattern'],
         'trigger': info['trigger'],
-        'indicator': info['indicator']
+        'indicator': indicator
     }
 
 @app.route('/explain', methods=['POST'])
@@ -341,7 +347,7 @@ def explain():
             features_by_cat[cat].append(e)
 
         summary = _generate_summary(pred_label, features_by_cat)
-        critical = _generate_critical_insight(pred_label)
+        critical = _generate_critical_insight(pred_label, top)
 
         reason = 'benign' if pred_label == 'BENIGN' else 'anomaly'
         if pred_label == 'BENIGN' and len([x for x in all_explanations if x['distance'] > 0.15]) == 0:
