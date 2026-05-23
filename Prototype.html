@@ -1155,6 +1155,7 @@ async function runSimulation(className) {
 
     // Fetch explanation
     let explainHtml = '<strong style="color:#9cdcfe">Description:</strong> ' + (CLASS_EXPLANATIONS[cleaned] || '');
+    let expData = null;
     try {
       const expRes = await fetch('http://localhost:8080/explain', {
         method: 'POST',
@@ -1163,7 +1164,7 @@ async function runSimulation(className) {
         signal: AbortSignal.timeout(5000)
       });
       if (expRes.ok) {
-        const expData = await expRes.json();
+        expData = await expRes.json();
         const summ = expData.summary;
         const crit = expData.critical;
         if (summ) explainHtml += '<div style="margin-top:6px;padding-top:6px;border-top:1px solid #1b4f8a;color:#a8c9e0">' + summ + '</div>';
@@ -1190,6 +1191,35 @@ async function runSimulation(className) {
         }
       }
     } catch (e) {}
+
+    // Traffic visualization chart
+    const topFeats = expData && expData.explanation ? expData.explanation.slice(0, 8) : [];
+    if (topFeats.length > 0) {
+      explainHtml += '<div style="margin-top:10px;padding-top:8px;border-top:1px solid #1b4f8a"><strong style="color:#9cdcfe;font-size:11px">FEATURE COMPARISON: Input vs Benign Average</strong></div>';
+      explainHtml += '<div style="margin-top:6px">';
+      for (const f of topFeats) {
+        // Map scaled values [0,1] to visible bar widths [3%, 97%]
+        const inpPct = Math.min(f.value, 1) * 94 + 3;
+        const benPct = Math.min(f.benign_avg, 1) * 94 + 3;
+        const color = f.direction === 'higher' ? '#f44747' : '#dcdcaa';
+        explainHtml += '<div style="margin-bottom:6px;font-size:9px">';
+        explainHtml += '<div style="color:#9cdcfe;margin-bottom:2px;font-size:9px">' + f.feature + '</div>';
+        explainHtml += '<div style="position:relative;height:18px;background:#0a1a33;border-radius:3px;overflow:hidden;border:1px solid #0e3460">';
+        explainHtml += '<div style="position:absolute;height:100%;width:' + benPct.toFixed(0) + '%;background:#1b4f8a;opacity:0.5;left:0;top:0;border-right:1px solid #2a6aaa"></div>';
+        explainHtml += '<div style="position:absolute;height:100%;width:' + inpPct.toFixed(0) + '%;background:' + color + ';opacity:0.7;left:0;top:0"></div>';
+        explainHtml += '<div style="position:relative;font-size:8px;color:#ccc;padding:3px 5px;line-height:12px">';
+        explainHtml += '<span style="background:rgba(0,0,0,0.5);padding:0 3px">INPUT=' + f.value + '</span> ';
+        explainHtml += '<span style="color:#4a6d9c;background:rgba(0,0,0,0.5);padding:0 3px">BENIGN=' + f.benign_avg + '</span>';
+        explainHtml += '</div></div></div>';
+      }
+      explainHtml += '</div>';
+    }
+
+    // Show full vector
+    explainHtml += '<div style="margin-top:8px;padding-top:6px;border-top:1px solid #0e3460">';
+    explainHtml += '<div style="font-size:9px;color:#4a6d9c;cursor:pointer" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display===\'none\'?\'block\':\'none\'">&#9654; Click to show/hide full 78-feature vector</div>';
+    explainHtml += '<div style="display:none;margin-top:4px;padding:6px;background:#00122e;border-radius:2px;font-size:8px;color:#6a8dad;word-break:break-all;max-height:120px;overflow-y:auto">' + vecStr + '</div>';
+    explainHtml += '</div>';
 
     document.getElementById('sim-cc-explain').innerHTML = explainHtml;
     document.getElementById('sim-status').textContent = 'Tested ' + className + ' → predicted ' + cleaned + ' (conf=' + (conf*100).toFixed(2) + '%)';
