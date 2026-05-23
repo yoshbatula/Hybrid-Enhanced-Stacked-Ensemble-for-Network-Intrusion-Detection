@@ -313,6 +313,25 @@ def explain():
         all_explanations.sort(key=lambda x: x['distance'], reverse=True)
         top = all_explanations[:12]
 
+        # BENIGN: include top features even if they don't pass threshold
+        if pred_label == 'BENIGN' and len(top) == 0:
+            for idx in range(len(FEATURE_NAMES)):
+                fname = FEATURE_NAMES[idx]
+                inp_val = fvec[idx]
+                benign_mean = benign_stats['mean'][idx]
+                benign_std = benign_stats['std'][idx]
+                diff = inp_val - benign_mean
+                distance = abs(diff) / (benign_std + 1e-8)
+                direction = 'higher' if diff > 0.04 else ('lower' if diff < -0.04 else 'typical')
+                all_explanations.append({
+                    'feature': fname, 'value': round(float(inp_val), 4),
+                    'benign_avg': round(float(benign_mean), 4),
+                    'direction': direction, 'distance': round(float(distance), 2),
+                    'category': _categorize_feature(fname)
+                })
+            all_explanations.sort(key=lambda x: x['distance'], reverse=True)
+            top = all_explanations[:8]
+
         # Group by category for summary
         features_by_cat = {}
         for e in all_explanations[:20]:
@@ -325,7 +344,7 @@ def explain():
         critical = _generate_critical_insight(pred_label)
 
         reason = 'benign' if pred_label == 'BENIGN' else 'anomaly'
-        if pred_label == 'BENIGN' and len(top) == 0:
+        if pred_label == 'BENIGN' and len([x for x in all_explanations if x['distance'] > 0.15]) == 0:
             reason = 'benign_typical'
 
         return jsonify({

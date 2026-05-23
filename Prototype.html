@@ -1199,8 +1199,8 @@ async function runSimulation(className) {
       explainHtml += '<div style="margin-top:6px">';
       for (const f of topFeats) {
         const maxW = Math.max(f.value, f.benign_avg, 0.001);
-        const inpPct = (f.value / maxW) * 90 + 10;
-        const benPct = (f.benign_avg / maxW) * 90 + 10;
+        const inpPct = (f.value / maxW) * 100;
+        const benPct = (f.benign_avg / maxW) * 100;
         const isHigh = f.direction === 'higher';
         explainHtml += '<div style="margin-bottom:8px;font-size:9px">';
         explainHtml += '<div style="color:#9cdcfe;margin-bottom:1px;font-size:9px">' + f.feature + '</div>';
