@@ -430,8 +430,8 @@
     <div class="tab-panel" id="tab-sim">
       <div class="perf-panel">
         <div>
-          <div class="perf-section-title">ATTACK SIMULATOR — SELECT AN ATTACK TYPE</div>
-          <div style="margin-top:8px;font-size:10px;color:#4a6d9c">Click an attack class to load a random test vector and see the model's response.</div>
+          <div class="perf-section-title">ATTACK SIMULATOR </div>
+          <!-- <div style="margin-top:8px;font-size:10px;color:#4a6d9c">Click an attack class to load a random test vector and see the model's response.</div> -->
           <div id="sim-buttons" style="margin-top:12px;display:flex;flex-wrap:wrap;gap:6px"></div>
           <div id="sim-status" style="margin-top:8px;font-size:10px;color:#4a6d9c"></div>
         </div>
@@ -1180,7 +1180,7 @@ async function runSimulation(className) {
           explainHtml += '<div style="margin-top:6px;padding-top:6px;border-top:1px solid #1b4f8a"><strong style="color:#9cdcfe">Deviating Features:</strong></div>';
           explainHtml += '<div style="margin-top:4px;display:grid;grid-template-columns:auto 1fr auto;gap:3px 8px;font-size:10px;color:#a8c9e0">';
           explainHtml += '<div style="color:#4a6d9c">FEATURE</div><div style="color:#4a6d9c">VALUE vs BENIGN</div><div style="color:#4a6d9c">DEV</div>';
-          for (const f of top.slice(0, 5)) {
+          for (const f of top.slice(0, 8)) {
             const arrow = f.direction === 'higher' ? '&#9650;' : f.direction === 'lower' ? '&#9660;' : '&#9654;';
             const color = f.direction === 'higher' ? '#f44747' : f.direction === 'lower' ? '#dcdcaa' : '#4a6d9c';
             explainHtml += '<div style="color:#9cdcfe">' + f.feature + '</div>';
@@ -1198,19 +1198,25 @@ async function runSimulation(className) {
       explainHtml += '<div style="margin-top:10px;padding-top:8px;border-top:1px solid #1b4f8a"><strong style="color:#9cdcfe;font-size:11px">FEATURE COMPARISON: Input vs Benign Average</strong></div>';
       explainHtml += '<div style="margin-top:6px">';
       for (const f of topFeats) {
-        // Map scaled values [0,1] to visible bar widths [3%, 97%]
-        const inpPct = Math.min(f.value, 1) * 94 + 3;
-        const benPct = Math.min(f.benign_avg, 1) * 94 + 3;
-        const color = f.direction === 'higher' ? '#f44747' : '#dcdcaa';
-        explainHtml += '<div style="margin-bottom:6px;font-size:9px">';
-        explainHtml += '<div style="color:#9cdcfe;margin-bottom:2px;font-size:9px">' + f.feature + '</div>';
-        explainHtml += '<div style="position:relative;height:18px;background:#0a1a33;border-radius:3px;overflow:hidden;border:1px solid #0e3460">';
-        explainHtml += '<div style="position:absolute;height:100%;width:' + benPct.toFixed(0) + '%;background:#1b4f8a;opacity:0.5;left:0;top:0;border-right:1px solid #2a6aaa"></div>';
-        explainHtml += '<div style="position:absolute;height:100%;width:' + inpPct.toFixed(0) + '%;background:' + color + ';opacity:0.7;left:0;top:0"></div>';
-        explainHtml += '<div style="position:relative;font-size:8px;color:#ccc;padding:3px 5px;line-height:12px">';
-        explainHtml += '<span style="background:rgba(0,0,0,0.5);padding:0 3px">INPUT=' + f.value + '</span> ';
-        explainHtml += '<span style="color:#4a6d9c;background:rgba(0,0,0,0.5);padding:0 3px">BENIGN=' + f.benign_avg + '</span>';
-        explainHtml += '</div></div></div>';
+        const maxW = Math.max(f.value, f.benign_avg, 0.001);
+        const inpPct = (f.value / maxW) * 90 + 10;
+        const benPct = (f.benign_avg / maxW) * 90 + 10;
+        const isHigh = f.direction === 'higher';
+        explainHtml += '<div style="margin-bottom:8px;font-size:9px">';
+        explainHtml += '<div style="color:#9cdcfe;margin-bottom:1px;font-size:9px">' + f.feature + '</div>';
+        // INPUT bar
+        explainHtml += '<div style="display:flex;align-items:center;gap:4px;margin-bottom:1px">';
+        explainHtml += '<span style="color:#f44747;font-size:8px;width:32px">INPUT</span>';
+        explainHtml += '<div style="flex:1;height:12px;background:#0a1a33;border-radius:2px;overflow:hidden;border:1px solid #0e3460">';
+        explainHtml += '<div style="height:100%;width:' + inpPct.toFixed(0) + '%;background:' + (isHigh ? '#f44747' : '#dcdcaa') + ';opacity:0.85"></div></div>';
+        explainHtml += '<span style="color:#ccc;font-size:8px;width:50px;text-align:right">' + f.value + '</span></div>';
+        // BENIGN bar
+        explainHtml += '<div style="display:flex;align-items:center;gap:4px">';
+        explainHtml += '<span style="color:#4a6d9c;font-size:8px;width:32px">BENIGN</span>';
+        explainHtml += '<div style="flex:1;height:8px;background:#0a1a33;border-radius:2px;overflow:hidden;border:1px solid #0e3460">';
+        explainHtml += '<div style="height:100%;width:' + benPct.toFixed(0) + '%;background:#1b4f8a;opacity:0.6"></div></div>';
+        explainHtml += '<span style="color:#4a6d9c;font-size:8px;width:50px;text-align:right">' + f.benign_avg + '</span></div>';
+        explainHtml += '</div>';
       }
       explainHtml += '</div>';
     }
