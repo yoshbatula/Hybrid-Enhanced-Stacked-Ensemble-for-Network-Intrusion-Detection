@@ -500,7 +500,7 @@
 </div>
 
 <script>
-const REP = '\uFFFD';
+const REP = '\u00EF\u00BF\u00BD';
 const ATTACKS = [
   { label:'BENIGN',                              cls:'r-benign', sev:'low',  w:55 },
   { label:'DDoS',                                cls:'r-attack', sev:'high', w:6  },
@@ -753,9 +753,9 @@ const CLASS_EXPLANATIONS = {
 
 function displayName(label) {
   return label
-    .replace('Web Attack \uFFFD Brute Force', 'Web Attack - Brute Force')
-    .replace('Web Attack \uFFFD Sql Injection', 'Web Attack - Sql Injection')
-    .replace('Web Attack \uFFFD XSS', 'Web Attack - XSS');
+    .replace('Web Attack \u00EF\u00BF\u00BD Brute Force', 'Web Attack - Brute Force')
+    .replace('Web Attack \u00EF\u00BF\u00BD Sql Injection', 'Web Attack - Sql Injection')
+    .replace('Web Attack \u00EF\u00BF\u00BD XSS', 'Web Attack - XSS');
 }
 
 function showClassMetrics(label, explanation) {

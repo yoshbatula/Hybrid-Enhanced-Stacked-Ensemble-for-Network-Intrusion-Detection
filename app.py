@@ -260,7 +260,7 @@ DEFAULT_INSIGHT = {
 def _generate_critical_insight(pred_label):
     if pred_label == 'BENIGN':
         return None
-    display = pred_label.replace('\ufffd', '-')
+    display = pred_label.replace('\xef\xbf\xbd', '-')
     info = ATTACK_INSIGHTS.get(display, ATTACK_INSIGHTS.get(pred_label, DEFAULT_INSIGHT))
     return {
         'pattern': info['pattern'],
@@ -426,7 +426,7 @@ def get_demo_vectors():
                     float_vals = [float(v) for v in vals]
                 except:
                     continue
-                label_clean = label.replace('\ufffd', '-')
+                label_clean = label.replace('\xef\xbf\xbd', '-')
                 if label_clean not in vectors:
                     vectors[label_clean] = []
                 vectors[label_clean].append(float_vals)
