@@ -1049,8 +1049,16 @@ function renderSimButtons() {
   randomBtn.style.cssText = 'background:#1b4f8a;border:1px solid #569cd6;color:#f1c40f;padding:8px 16px;border-radius:3px;cursor:pointer;font-family:inherit;font-size:12px;font-weight:600';
   randomBtn.onmouseover = () => { randomBtn.style.background = '#2569b0'; };
   randomBtn.onmouseout = () => { randomBtn.style.background = '#1b4f8a'; };
-  const allClasses = Object.keys(demoVectors).filter(k => k !== 'BENIGN' && demoVectors[k].length > 0);
-  randomBtn.onclick = () => { runSimulation(allClasses[Math.floor(Math.random() * allClasses.length)]); };
+  randomBtn.onclick = async () => {
+    const classes = Object.keys(demoVectors).filter(k => k !== 'BENIGN' && demoVectors[k].length > 0);
+    if (classes.length === 0) {
+      document.getElementById('sim-status').textContent = 'No attack vectors available!';
+      return;
+    }
+    const pick = classes[Math.floor(Math.random() * classes.length)];
+    document.getElementById('sim-status').textContent = 'Loading ' + pick + ' (' + demoVectors[pick].length + ' vectors)...';
+    await runSimulation(pick);
+  };
   container.appendChild(randomBtn);
 
   // Separator
