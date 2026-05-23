@@ -374,6 +374,7 @@
     <div class="tab-nav">
       <button class="tab-btn active" onclick="switchTab('live')">[ LIVE FEED ]</button>
       <button class="tab-btn" onclick="switchTab('perf')">[ PERFORMANCE METRICS ]</button>
+      <button class="tab-btn" onclick="switchTab('sim')">[ ATTACK SIMULATOR ]</button>
     </div>
 
     <div class="tab-panel active" id="tab-live" style="flex-direction:column;">
@@ -420,6 +421,44 @@
               </div>
               <div style="margin-top:8px;font-size:10px;color:#4a6d9c" id="cc-sup"></div>
               <div style="margin-top:10px;padding:10px;background:#00122e;border-left:3px solid #1b4f8a;border-radius:2px;font-size:11px;color:#a8c9e0;line-height:1.5" id="cc-explain"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-panel" id="tab-sim">
+      <div class="perf-panel">
+        <div>
+          <div class="perf-section-title">ATTACK SIMULATOR — SELECT AN ATTACK TYPE</div>
+          <div style="margin-top:8px;font-size:10px;color:#4a6d9c">Click an attack class to load a random test vector and see the model's response.</div>
+          <div id="sim-buttons" style="margin-top:12px;display:flex;flex-wrap:wrap;gap:6px"></div>
+          <div id="sim-status" style="margin-top:8px;font-size:10px;color:#4a6d9c"></div>
+        </div>
+        <div class="perf-row" id="sim-current-class-row" style="display:none">
+          <div class="perf-col">
+            <div class="perf-section-title">SIMULATION RESULT</div>
+            <div id="sim-current-class-detail" style="background:#001c3d;border:1px solid #1b4f8a;border-radius:3px;padding:16px;">
+              <div style="font-size:18px;color:#9cdcfe;margin-bottom:12px" id="sim-cc-name">--</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+                <div style="background:#012456;border:1px solid #0e3460;border-radius:3px;padding:10px;text-align:center">
+                  <div style="font-size:20px;color:#4ec9b0" id="sim-cc-prec">0.00%</div>
+                  <div style="font-size:9px;color:#4a6d9c;letter-spacing:1px">PRECISION</div>
+                </div>
+                <div style="background:#012456;border:1px solid #0e3460;border-radius:3px;padding:10px;text-align:center">
+                  <div style="font-size:20px;color:#4ec9b0" id="sim-cc-recall">0.00%</div>
+                  <div style="font-size:9px;color:#4a6d9c;letter-spacing:1px">RECALL</div>
+                </div>
+                <div style="background:#012456;border:1px solid #0e3460;border-radius:3px;padding:10px;text-align:center">
+                  <div style="font-size:20px;color:#dcdcaa" id="sim-cc-f1">0.00%</div>
+                  <div style="font-size:9px;color:#4a6d9c;letter-spacing:1px">F1-SCORE</div>
+                </div>
+              </div>
+              <div style="margin-top:8px;font-size:10px;color:#4a6d9c" id="sim-cc-sup"></div>
+              <div style="margin-top:10px;padding:10px;background:#00122e;border-left:3px solid #1b4f8a;border-radius:2px;font-size:11px;color:#a8c9e0;line-height:1.5" id="sim-cc-explain">
+                <strong style="color:#9cdcfe">Description:</strong> <span id="sim-cc-desc"></span>
+              </div>
+              <div style="margin-top:8px;font-size:10px;color:#4a6d9c" id="sim-cc-vector"></div>
             </div>
           </div>
         </div>
@@ -764,8 +803,12 @@ function switchTab(tab) {
   document.getElementById('tab-'+tab).classList.add('active');
   if(event && event.target) event.target.classList.add('active');
   // Mark the corresponding button as active
-  if(tab === 'perf') document.querySelectorAll('.tab-btn')[1].classList.add('active');
   if(tab === 'live') document.querySelectorAll('.tab-btn')[0].classList.add('active');
+  if(tab === 'perf') document.querySelectorAll('.tab-btn')[1].classList.add('active');
+  if(tab === 'sim') {
+    document.querySelectorAll('.tab-btn')[2].classList.add('active');
+    if (!window.demoVectorsLoaded) loadDemoVectors();
+  }
 }
 
 async function initializeMetrics() {
@@ -979,6 +1022,173 @@ featureInput.addEventListener('keydown', async (e) => {
     }
   }
 });
+
+// ===== ATTACK SIMULATOR =====
+let demoVectors = {};
+window.demoVectorsLoaded = false;
+
+async function loadDemoVectors() {
+  try {
+    const res = await fetch('http://localhost:8080/demo_vectors');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    demoVectors = await res.json();
+    window.demoVectorsLoaded = true;
+    renderSimButtons();
+    document.getElementById('sim-status').textContent = 'Loaded ' + Object.keys(demoVectors).length + ' attack types.';
+  } catch (e) {
+    document.getElementById('sim-status').textContent = 'Could not load vectors: ' + e.message;
+  }
+}
+
+function renderSimButtons() {
+  const container = document.getElementById('sim-buttons');
+  container.innerHTML = '';
+  // Random button
+  const randomBtn = document.createElement('button');
+  randomBtn.innerHTML = '&#127922; RANDOM ATTACK';
+  randomBtn.style.cssText = 'background:#1b4f8a;border:1px solid #569cd6;color:#f1c40f;padding:8px 16px;border-radius:3px;cursor:pointer;font-family:inherit;font-size:12px;font-weight:600';
+  randomBtn.onmouseover = () => { randomBtn.style.background = '#2569b0'; };
+  randomBtn.onmouseout = () => { randomBtn.style.background = '#1b4f8a'; };
+  const allClasses = Object.keys(demoVectors).filter(k => k !== 'BENIGN' && demoVectors[k].length > 0);
+  randomBtn.onclick = () => { runSimulation(allClasses[Math.floor(Math.random() * allClasses.length)]); };
+  container.appendChild(randomBtn);
+
+  // Separator
+  const sep = document.createElement('div');
+  sep.style.cssText = 'width:100%;height:1px;background:#0e3460;margin:4px 0';
+  container.appendChild(sep);
+
+  const ordered = ['BENIGN','DDoS','DoS Hulk','DoS GoldenEye','DoS Slowhttptest','DoS slowloris','PortScan','FTP-Patator','SSH-Patator','Bot','Heartbleed','Infiltration','Web Attack - Brute Force','Web Attack - Sql Injection','Web Attack - XSS'];
+  for (const cls of ordered) {
+    const btn = document.createElement('button');
+    btn.textContent = cls;
+    const count = (demoVectors[cls] || []).length;
+    btn.title = count + ' samples';
+    btn.style.cssText = 'background:#012456;border:1px solid #1b4f8a;color:#9cdcfe;padding:6px 12px;border-radius:3px;cursor:pointer;font-family:inherit;font-size:11px';
+    btn.onmouseover = () => { btn.style.background = '#1b4f8a'; };
+    btn.onmouseout = () => { btn.style.background = '#012456'; };
+    if (!count) {
+      btn.style.opacity = '0.3';
+      btn.style.cursor = 'not-allowed';
+    } else {
+      btn.onclick = () => runSimulation(cls);
+    }
+    container.appendChild(btn);
+  }
+}
+
+async function runSimulation(className) {
+  const vectors = demoVectors[className];
+  if (!vectors || vectors.length === 0) return;
+  const vec = vectors[Math.floor(Math.random() * vectors.length)];
+  const vecStr = vec.join(',');
+  document.getElementById('sim-status').textContent = 'Testing ' + className + '...';
+
+  document.getElementById('sim-cc-name').textContent = className;
+  document.getElementById('sim-cc-desc').textContent = 'Running prediction...';
+  document.getElementById('sim-cc-prec').textContent = '--';
+  document.getElementById('sim-cc-recall').textContent = '--';
+  document.getElementById('sim-cc-f1').textContent = '--';
+  document.getElementById('sim-cc-sup').textContent = '';
+  document.getElementById('sim-cc-vector').textContent = 'Vector: ' + vecStr.substring(0, 80) + '...';
+  document.getElementById('sim-current-class-row').style.display = 'flex';
+
+  try {
+    const res = await fetch('http://localhost:8080/predict', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ features: vec }),
+      signal: AbortSignal.timeout(10000)
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const label = data.label;
+    const conf = parseFloat(data.confidence);
+    const cleaned = displayName(label);
+
+    // Update global counters
+    if (!startTime) {
+      startTime = Date.now();
+      if (!uptimeTimer) uptimeTimer = setInterval(updateUptime, 1000);
+    }
+    const atkMeta = ATTACKS.find(a => a.label === label) || { cls:'r-warn', sev:'med' };
+    counts.total++;
+    if (label === 'BENIGN') counts.benign++;
+    else if (atkMeta.sev === 'med') counts.warn++;
+    else counts.attack++;
+    dist[label] = (dist[label]||0)+1;
+    document.getElementById('h-pkts').textContent = counts.total;
+    document.getElementById('h-warn').textContent = counts.warn;
+    document.getElementById('h-threats').textContent = counts.attack;
+    document.getElementById('c-benign').textContent = counts.benign;
+    document.getElementById('c-attack').textContent = counts.attack;
+    document.getElementById('c-warn').textContent = counts.warn;
+    document.getElementById('c-total').textContent = counts.total;
+    if (label !== 'BENIGN') {
+      alerts.unshift({ label, sev: atkMeta.sev, src: 'simulator', time: new Date().toLocaleTimeString() });
+      if (alerts.length > 8) alerts.pop();
+      renderAlerts();
+    }
+    updateThreatLevel();
+    renderDist();
+    showClassMetrics(label, []);
+
+    const metrics = CLASS_TRAINING_METRICS[label];
+    document.getElementById('sim-cc-name').textContent = cleaned;
+    if (metrics) {
+      document.getElementById('sim-cc-prec').textContent = (metrics.p * 100).toFixed(2) + '%';
+      document.getElementById('sim-cc-recall').textContent = (metrics.r * 100).toFixed(2) + '%';
+      document.getElementById('sim-cc-f1').textContent = (metrics.f1 * 100).toFixed(2) + '%';
+      document.getElementById('sim-cc-sup').textContent = 'Training samples: ' + metrics.sup.toLocaleString() + ' | Confidence: ' + (conf * 100).toFixed(2) + '%';
+    }
+    document.getElementById('sim-cc-prec').style.color = metrics && metrics.p >= 0.95 ? '#4ec9b0' : metrics && metrics.p >= 0.80 ? '#dcdcaa' : '#f44747';
+    document.getElementById('sim-cc-recall').style.color = metrics && metrics.r >= 0.95 ? '#4ec9b0' : metrics && metrics.r >= 0.80 ? '#dcdcaa' : '#f44747';
+    document.getElementById('sim-cc-f1').style.color = metrics && metrics.f1 >= 0.95 ? '#4ec9b0' : metrics && metrics.f1 >= 0.80 ? '#dcdcaa' : '#f44747';
+
+    // Fetch explanation
+    let explainHtml = '<strong style="color:#9cdcfe">Description:</strong> ' + (CLASS_EXPLANATIONS[cleaned] || '');
+    try {
+      const expRes = await fetch('http://localhost:8080/explain', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ features: vec }),
+        signal: AbortSignal.timeout(5000)
+      });
+      if (expRes.ok) {
+        const expData = await expRes.json();
+        const summ = expData.summary;
+        const crit = expData.critical;
+        if (summ) explainHtml += '<div style="margin-top:6px;padding-top:6px;border-top:1px solid #1b4f8a;color:#a8c9e0">' + summ + '</div>';
+        if (crit && crit.pattern) {
+          explainHtml += '<div style="margin-top:6px;padding-top:6px;border-top:1px solid #1b4f8a">';
+          explainHtml += '<div><strong style="color:#f44747">Attack:</strong> <span style="color:#a8c9e0">' + crit.pattern + '</span></div>';
+          explainHtml += '<div style="margin-top:3px"><strong style="color:#dcdcaa">Trigger:</strong> <span style="color:#a8c9e0">' + crit.trigger + '</span></div>';
+          if (crit.indicator) explainHtml += '<div style="margin-top:3px"><strong style="color:#4ec9b0">Indicator:</strong> <span style="color:#a8c9e0">' + crit.indicator + '</span></div>';
+          explainHtml += '</div>';
+        }
+        const top = expData.explanation || [];
+        if (top.length > 0) {
+          explainHtml += '<div style="margin-top:6px;padding-top:6px;border-top:1px solid #1b4f8a"><strong style="color:#9cdcfe">Deviating Features:</strong></div>';
+          explainHtml += '<div style="margin-top:4px;display:grid;grid-template-columns:auto 1fr auto;gap:3px 8px;font-size:10px;color:#a8c9e0">';
+          explainHtml += '<div style="color:#4a6d9c">FEATURE</div><div style="color:#4a6d9c">VALUE vs BENIGN</div><div style="color:#4a6d9c">DEV</div>';
+          for (const f of top.slice(0, 5)) {
+            const arrow = f.direction === 'higher' ? '&#9650;' : f.direction === 'lower' ? '&#9660;' : '&#9654;';
+            const color = f.direction === 'higher' ? '#f44747' : f.direction === 'lower' ? '#dcdcaa' : '#4a6d9c';
+            explainHtml += '<div style="color:#9cdcfe">' + f.feature + '</div>';
+            explainHtml += '<div>' + f.value + ' <span style="color:#4a6d9c">vs</span> ' + f.benign_avg + '</div>';
+            explainHtml += '<div style="color:' + color + '">' + arrow + ' ' + f.distance + '</div>';
+          }
+          explainHtml += '</div>';
+        }
+      }
+    } catch (e) {}
+
+    document.getElementById('sim-cc-explain').innerHTML = explainHtml;
+    document.getElementById('sim-status').textContent = 'Tested ' + className + ' → predicted ' + cleaned + ' (conf=' + (conf*100).toFixed(2) + '%)';
+  } catch (e) {
+    document.getElementById('sim-status').textContent = 'Error: ' + e.message;
+  }
+}
 </script>
 </body>
 </html>

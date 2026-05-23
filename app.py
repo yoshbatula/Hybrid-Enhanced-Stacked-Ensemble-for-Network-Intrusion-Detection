@@ -122,21 +122,21 @@ def _generate_summary(pred_label, features_by_cat):
         count = len(items)
         dirs = set(i['direction'] for i in items)
         if cat == 'timing' and 'lower' in dirs:
-            parts.append(f'abnormally fast/low timing metrics ({count} features)')
+            parts.append('abnormally fast/low timing metrics ({} features)'.format(count))
         elif cat == 'timing' and 'higher' in dirs:
-            parts.append(f'abnormally slow/high timing metrics ({count} features)')
+            parts.append('abnormally slow/high timing metrics ({} features)'.format(count))
         elif cat == 'volume' and 'higher' in dirs:
-            parts.append(f'elevated traffic volume ({count} features)')
+            parts.append('elevated traffic volume ({} features)'.format(count))
         elif cat == 'volume' and 'lower' in dirs:
-            parts.append(f'reduced traffic volume ({count} features)')
+            parts.append('reduced traffic volume ({} features)'.format(count))
         elif cat == 'flags' and 'higher' in dirs:
-            parts.append(f'unusual flag patterns ({count} features)')
+            parts.append('unusual flag patterns ({} features)'.format(count))
         elif cat == 'port':
-            parts.append(f'unusual destination port')
+            parts.append('unusual destination port')
         elif cat == 'window':
-            parts.append(f'abnormal TCP window sizes')
+            parts.append('abnormal TCP window sizes')
         else:
-            parts.append(f'anomalous {cat} characteristics ({count} features)')
+            parts.append('anomalous {} characteristics ({} features)'.format(cat, count))
     if not parts:
         return None
     summary = 'Traffic flagged as ' + pred_label + ': '
@@ -147,6 +147,126 @@ def _generate_summary(pred_label, features_by_cat):
     else:
         summary += ', '.join(parts[:-1]) + ', and ' + parts[-1] + '.'
     return summary
+
+ATTACK_INSIGHTS = {
+    'DDoS': {
+        'pattern': 'Distributed Denial of Service (DDoS) flood',
+        'trigger': 'Massive traffic volume with extreme packet rates targeting a single endpoint',
+        'indicator': 'Near-zero Flow IAT indicates rapid-fire packet flood. '
+                     'Destination Port confirms service under attack. '
+                     'Abnormal Init_Win_bytes suggests spoofed/malformed packets. '
+                     'Bwd Packets/s elevation indicates reflection/amplification behavior.'
+    },
+    'DoS Hulk': {
+        'pattern': 'HTTP flood (DoS Hulk)',
+        'trigger': 'High-rate HTTP GET flood with randomized parameters to exhaust server resources',
+        'indicator': 'Extremely high packet count with many SYN flags targeting port 80. '
+                     'Fwd Packet Length variation indicates randomized HTTP request sizes. '
+                     'Elevated Flow Bytes/s with minimal IAT gaps confirms sustained high-rate flood.'
+    },
+    'DoS GoldenEye': {
+        'pattern': 'Slow-rate HTTP DoS (GoldenEye)',
+        'trigger': 'Partial HTTP connections held open with slow retransmission',
+        'indicator': 'Extended Flow Duration relative to packet count indicates held connections. '
+                     'Abnormal Fwd IAT pattern suggests deliberate slow data transmission. '
+                     'Keep-alive exploitation to exhaust server connection pool.'
+    },
+    'DoS slowloris': {
+        'pattern': 'Slow headers DoS (slowloris)',
+        'trigger': 'Multiple partial HTTP requests with slow header delivery',
+        'indicator': 'Very high Flow IAT Max with minimal bytes per packet. '
+                     'Many simultaneous connections with partial headers. '
+                     'Bwd IAT elevation indicates server waiting for complete headers.'
+    },
+    'DoS Slowhttptest': {
+        'pattern': 'Slow body DoS (Slow HTTP Test)',
+        'trigger': 'Exaggeratedly slow POST body transmission to keep connections alive',
+        'indicator': 'Extremely slow byte transmission rate in Bwd direction. '
+                     'High Flow IAT with low total packet count. '
+                     'deliberately delayed HTTP body to exhaust concurrent connection limit.'
+    },
+    'PortScan': {
+        'pattern': 'Reconnaissance / Port Scanning',
+        'trigger': 'Systematically probing multiple ports to discover open services',
+        'indicator': 'Multiple connections to different ports with near-zero data exchange. '
+                     'Very short Flow Duration with SYN-only flag pattern. '
+                     'Destination Port variation indicates sequential/randomized scanning. '
+                     'Minimal Init_Win_bytes confirms no handshake completion.'
+    },
+    'FTP-Patator': {
+        'pattern': 'Brute-force FTP attack',
+        'trigger': 'Repeated login attempts against FTP service on port 21',
+        'indicator': 'High packet count relative to flow duration indicates repeated auth attempts. '
+                     'Destination Port 21 with alternating ACK/PSH flags confirms FTP protocol payloads. '
+                     'Short-lived connections with rapid retry pattern.'
+    },
+    'SSH-Patator': {
+        'pattern': 'Brute-force SSH attack',
+        'trigger': 'Repeated SSH authentication attempts to gain unauthorized access',
+        'indicator': 'Repeated connections to port 22 with short flow durations. '
+                     'High packet count for auth protocol exchanges. '
+                     'Identical packet size distribution across multiple flows suggests automated tool.'
+    },
+    'Bot': {
+        'pattern': 'Botnet / C&C communication',
+        'trigger': 'Periodic beaconing to command-and-control infrastructure',
+        'indicator': 'Regular IAT intervals indicating scheduled beaconing (not human traffic). '
+                     'Small packet sizes with consistent timing — characteristic of C&C heartbeat. '
+                     'Unusual ratio of small outbound to inbound packets.'
+    },
+    'Heartbleed': {
+        'pattern': 'Heartbleed TLS exploit',
+        'trigger': 'Malformed TLS heartbeat request causing memory leakage',
+        'indicator': 'Abnormal packet length for TLS handshake on port 443. '
+                     'Oversized heartbeat response indicating memory data exfiltration. '
+                     'Unique flag/header length combination not matching valid TLS.'
+    },
+    'Infiltration': {
+        'pattern': 'Internal network infiltration',
+        'trigger': 'Unauthorized access attempt via SMB or other internal protocols',
+        'indicator': 'Unusual port 445 (SMB) traffic from non-standard source. '
+                     'Crafted packet sizes atypical of legitimate SMB traffic. '
+                     'Init_Win_bytes inconsistent with Windows SMB implementation.'
+    },
+    'Web Attack - XSS': {
+        'pattern': 'Cross-Site Scripting (XSS) injection',
+        'trigger': 'Malicious script injected into web application via HTTP request',
+        'indicator': 'HTTP request with abnormal header length indicating injected payload. '
+                     'Unusual packet length distribution from script content. '
+                     'Flag combinations suggesting HTTP POST with encoded payload.'
+    },
+    'Web Attack - Brute Force': {
+        'pattern': 'Web application brute-force login',
+        'trigger': 'Repeated HTTP authentication attempts against web service',
+        'indicator': 'Multiple HTTP requests to port 80/443 with varying credentials. '
+                     'Detectable through request rate, packet size consistency, and timing patterns. '
+                     'POST/PUT methods with form-encoded payloads for credential submission.'
+    },
+    'Web Attack - Sql Injection': {
+        'pattern': 'SQL Injection attack',
+        'trigger': 'SQL commands injected into web application input parameters',
+        'indicator': 'HTTP requests with anomalous query string length and structure. '
+                     'Unusual URL encoding patterns indicating SQL syntax. '
+                     'Response size anomalies from database query manipulation.'
+    }
+}
+
+DEFAULT_INSIGHT = {
+    'pattern': 'Anomalous network traffic',
+    'trigger': 'Traffic deviating significantly from established benign patterns',
+    'indicator': 'Multiple feature deviations from BENIGN baseline across timing, volume, and protocol characteristics.'
+}
+
+def _generate_critical_insight(pred_label):
+    if pred_label == 'BENIGN':
+        return None
+    display = pred_label.replace('\ufffd', '-')
+    info = ATTACK_INSIGHTS.get(display, ATTACK_INSIGHTS.get(pred_label, DEFAULT_INSIGHT))
+    return {
+        'pattern': info['pattern'],
+        'trigger': info['trigger'],
+        'indicator': info['indicator']
+    }
 
 @app.route('/explain', methods=['POST'])
 def explain():
@@ -202,6 +322,7 @@ def explain():
             features_by_cat[cat].append(e)
 
         summary = _generate_summary(pred_label, features_by_cat)
+        critical = _generate_critical_insight(pred_label)
 
         reason = 'benign' if pred_label == 'BENIGN' else 'anomaly'
         if pred_label == 'BENIGN' and len(top) == 0:
@@ -212,6 +333,7 @@ def explain():
             'confidence': round(confidence, 4),
             'explanation': top,
             'summary': summary,
+            'critical': critical,
             'reason': reason
         })
 
@@ -281,6 +403,34 @@ def get_class_metrics():
         {'name': 'Web Attack \ufffd XSS', 'p': 32.68, 'r': 76.02, 'f1': 45.71, 'sup': 196},
     ]
     return jsonify({'class_metrics': class_metrics})
+
+@app.route('/demo_vectors', methods=['GET'])
+def get_demo_vectors():
+    vectors = {}
+    for fpath in ['cicids_test_vectors.txt', 'smote_test_vectors.txt']:
+        if not os.path.exists(fpath):
+            continue
+        with open(fpath) as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                if '|' in line:
+                    label, vals_str = line.split('|', 1)
+                else:
+                    continue
+                vals = vals_str.strip().split(',')
+                if len(vals) != 78:
+                    continue
+                try:
+                    float_vals = [float(v) for v in vals]
+                except:
+                    continue
+                label_clean = label.replace('\ufffd', '-')
+                if label_clean not in vectors:
+                    vectors[label_clean] = []
+                vectors[label_clean].append(float_vals)
+    return jsonify(vectors)
 
 if __name__ == '__main__':
     print('[NIDS] Starting Flask server on http://localhost:5000')
