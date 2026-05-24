@@ -811,7 +811,7 @@ function switchTab(tab) {
 
 async function initializeMetrics() {
   try {
-    const res = await fetch('http://localhost:8080/model_metrics', {
+    const res = await fetch('/model_metrics', {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
       signal: AbortSignal.timeout(5000)
@@ -915,7 +915,7 @@ featureInput.addEventListener('keydown', async (e) => {
     feed.scrollTop = feed.scrollHeight;
     
     try {
-      const res = await fetch('http://localhost:8080/predict', {
+      const res = await fetch('/predict', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ features }),
@@ -934,7 +934,7 @@ featureInput.addEventListener('keydown', async (e) => {
       // Fetch explanation
       let explanation = [], summary = '';
       try {
-        const expRes = await fetch('http://localhost:8080/explain', {
+        const expRes = await fetch('/explain', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ features }),
@@ -1027,7 +1027,7 @@ window.demoVectorsLoaded = false;
 
 async function loadDemoVectors() {
   try {
-    const res = await fetch('http://localhost:8080/demo_vectors');
+    const res = await fetch('/demo_vectors');
     if (!res.ok) throw new Error('HTTP ' + res.status);
     demoVectors = await res.json();
     window.demoVectorsLoaded = true;
@@ -1101,7 +1101,7 @@ async function runSimulation(className) {
 
   document.getElementById('sim-status').textContent = 'Testing ' + className + ' (sending request)...';
   try {
-    const res = await fetch('http://localhost:8080/predict', {
+    const res = await fetch('/predict', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ features: vec }),
@@ -1157,7 +1157,7 @@ async function runSimulation(className) {
     let explainHtml = '<strong style="color:#9cdcfe">Description:</strong> ' + (CLASS_EXPLANATIONS[cleaned] || '');
     let expData = null;
     try {
-      const expRes = await fetch('http://localhost:8080/explain', {
+      const expRes = await fetch('/explain', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ features: vec }),

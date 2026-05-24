@@ -14,11 +14,14 @@
 
 import os
 import numpy as np
-from flask import Flask, request, jsonify
-from flask_cors import CORS
+from flask import Flask, request, jsonify, send_from_directory
 
 app = Flask(__name__)
-CORS(app)
+
+# Serve the main HTML at root
+@app.route('/')
+def index():
+    return send_from_directory('.', 'Prototype.html')
 
 SAVE_DIR = './saved_model'
 
@@ -458,6 +461,7 @@ def get_demo_vectors():
     return jsonify(vectors)
 
 if __name__ == '__main__':
-    print('[NIDS] Starting Flask server on http://localhost:5000')
-    print('[NIDS] Open nids_dashboard.html and click [ MODE: SIM ] to go LIVE')
-    app.run(host='127.0.0.1', port=8080, debug=False)
+    port = int(os.environ.get('PORT', 8080))
+    print(f'[NIDS] Starting Flask server on http://0.0.0.0:{port}')
+    print(f'[NIDS] Open http://localhost:{port} in your browser')
+    app.run(host='0.0.0.0', port=port, debug=False)
